@@ -3,7 +3,7 @@ import { AppError } from "@/lib/errors";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { setSessionCookie, clearSessionCookie, getSessionUserId } from "@/lib/auth/session";
 import { CategoryService } from "@/lib/services/category-service";
-import type { LoginInput, RegisterInput } from "@/lib/validation/auth";
+import type { LoginInput, RegisterInput, UpdateProfileInput, ChangePasswordInput } from "@/lib/validation/auth";
 
 export interface PublicUser {
   id: string;
@@ -58,5 +58,31 @@ export const AuthService = {
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     return user ? toPublicUser(user) : null;
+  },
+
+  async updateProfile(userId: string, input: UpdateProfileInput): Promise<PublicUser> {
+    if (input.email) {
+      const existing = await prisma.user.findUnique({ where: { email: input.email } });
+      if (existing && existing.id !== userId) {
+        throw new AppError("CONFLICT", "An account with this email already exists.");
+      }
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { name: input.name, email: input.email },
+    });
+    return toPublicUser(user);
+  },
+
+  async changePassword(userId: string, input: ChangePasswordInput): Promise<void> {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const valid = await verifyPassword(user.passwordHash, input.currentPassword);
+    if (!valid) {
+      throw new AppError("VALIDATION_ERROR", "Current password is incorrect.");
+    }
+
+    const passwordHash = await hashPassword(input.newPassword);
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
   },
 };

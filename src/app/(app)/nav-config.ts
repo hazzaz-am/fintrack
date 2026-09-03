@@ -28,5 +28,5 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Savings Goals", href: "/savings-goals", icon: PiggyBank, enabled: true },
   { label: "Investments", href: "/investments", icon: LineChart, enabled: true },
   { label: "Reports", href: "/reports", icon: ChartColumn, enabled: true },
-  { label: "Settings", href: "/settings", icon: Settings, enabled: false },
+  { label: "Settings", href: "/settings", icon: Settings, enabled: true },
 ];

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import type { CreateCategoryInput } from "@/lib/validation/category";
+import type { CreateCategoryInput, UpdateCategoryInput } from "@/lib/validation/category";
 
 // Seeded into every new user's category list on registration (design.md Open
 // Question: seed-on-registration, not a shared read-only set) so a user's
@@ -94,5 +94,50 @@ export const CategoryService = {
       );
     }
     return category;
+  },
+
+  async update(userId: string, categoryId: string, input: UpdateCategoryInput) {
+    await getOwnedCategoryOrThrow(userId, categoryId);
+
+    if (input.parentCategoryId) {
+      if (input.parentCategoryId === categoryId) {
+        throw new AppError("VALIDATION_ERROR", "A category cannot be its own parent.");
+      }
+      await getOwnedCategoryOrThrow(userId, input.parentCategoryId);
+    }
+
+    return prisma.category.update({
+      where: { id: categoryId },
+      data: {
+        name: input.name,
+        parentCategoryId: input.parentCategoryId,
+        icon: input.icon,
+      },
+    });
+  },
+
+  /** Backs the Settings delete-confirmation copy (design.md D2) — how many transactions reference this category today. */
+  async getUsageCount(userId: string, categoryId: string): Promise<number> {
+    await getOwnedCategoryOrThrow(userId, categoryId);
+    return prisma.transaction.count({ where: { categoryId } });
+  },
+
+  async delete(userId: string, categoryId: string) {
+    await getOwnedCategoryOrThrow(userId, categoryId);
+
+    // The transactions_type_shape_check DB constraint requires every
+    // INCOME/EXPENSE row to keep a non-null categoryId, so a referenced
+    // category can never be hard-deleted — reassign those transactions to a
+    // different category first. Child categories aren't subject to that
+    // constraint and still orphan to top-level via the schema's SetNull cascade.
+    const usageCount = await prisma.transaction.count({ where: { categoryId } });
+    if (usageCount > 0) {
+      throw new AppError(
+        "CONFLICT",
+        `This category is used by ${usageCount} transaction${usageCount === 1 ? "" : "s"}. Reassign them to a different category before deleting.`
+      );
+    }
+
+    await prisma.category.delete({ where: { id: categoryId } });
   },
 };
