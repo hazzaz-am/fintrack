@@ -147,7 +147,7 @@ export default async function TransactionsPage({
               </span>
               <div className="flex gap-2">
                 {page > 1 ? (
-                  <Button variant="outline" size="sm" render={<Link href={pageHref(page - 1)} />}>
+                  <Button variant="outline" size="sm" nativeButton={false} render={<Link href={pageHref(page - 1)} />}>
                     Previous
                   </Button>
                 ) : (
@@ -156,7 +156,7 @@ export default async function TransactionsPage({
                   </Button>
                 )}
                 {page < totalPages ? (
-                  <Button variant="outline" size="sm" render={<Link href={pageHref(page + 1)} />}>
+                  <Button variant="outline" size="sm" nativeButton={false} render={<Link href={pageHref(page + 1)} />}>
                     Next
                   </Button>
                 ) : (

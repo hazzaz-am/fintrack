@@ -114,7 +114,7 @@ export function TransactionFilters({
       </FieldGroup>
       <div className="mt-4 flex items-center gap-2">
         <Button type="submit">Apply filters</Button>
-        <Button type="button" variant="outline" render={<Link href="/transactions" />}>
+        <Button type="button" variant="outline" nativeButton={false} render={<Link href="/transactions" />}>
           Clear
         </Button>
       </div>
