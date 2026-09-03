@@ -4,7 +4,7 @@ import { getSessionUserId } from "@/lib/auth/session";
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
   const userId = await getSessionUserId();
   if (userId) {
-    redirect("/accounts");
+    redirect("/dashboard");
   }
 
   return (

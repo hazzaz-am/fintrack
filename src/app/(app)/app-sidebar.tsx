@@ -28,7 +28,7 @@ export function AppSidebar({ user }: { user: PublicUser }) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link href="/accounts" />}>
+            <SidebarMenuButton size="lg" render={<Link href="/dashboard" />}>
               <Wallet />
               <span className="font-heading font-semibold">FinTrack</span>
             </SidebarMenuButton>

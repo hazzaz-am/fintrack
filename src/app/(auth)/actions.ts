@@ -41,7 +41,7 @@ export async function registerAction(
     throw error;
   }
 
-  redirect("/accounts");
+  redirect("/dashboard");
 }
 
 export async function loginAction(
@@ -67,5 +67,5 @@ export async function loginAction(
     throw error;
   }
 
-  redirect("/accounts");
+  redirect("/dashboard");
 }

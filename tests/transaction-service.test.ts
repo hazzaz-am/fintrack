@@ -133,3 +133,92 @@ describe("TransactionService", () => {
     expect(results[0].amount.toString()).toBe("200");
   });
 });
+
+describe("TransactionService.listPaginated", () => {
+  it("searches by description", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "100.00",
+      transactionDate: new Date("2026-09-01"),
+      description: "September rent",
+    });
+    await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "200.00",
+      transactionDate: new Date("2026-09-02"),
+      description: "Groceries",
+    });
+
+    const result = await TransactionService.listPaginated(user.id, { search: "rent" });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].description).toBe("September rent");
+    expect(result.total).toBe(1);
+  });
+
+  it("sorts by amount", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "50.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+    await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "500.00",
+      transactionDate: new Date("2026-09-02"),
+    });
+
+    const result = await TransactionService.listPaginated(user.id, { sortBy: "amount", sortDir: "desc" });
+    expect(result.items.map((item) => item.amount)).toEqual(["500", "50"]);
+  });
+
+  it("paginates results and reports the total across all pages", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    for (let i = 0; i < 5; i += 1) {
+      await TransactionService.recordExpense(user.id, {
+        accountId: account.id,
+        categoryId: category.id,
+        amount: "10.00",
+        transactionDate: new Date(`2026-09-0${i + 1}`),
+      });
+    }
+
+    const page1 = await TransactionService.listPaginated(user.id, { pageSize: 2, page: 1 });
+    expect(page1.items).toHaveLength(2);
+    expect(page1.total).toBe(5);
+
+    const page3 = await TransactionService.listPaginated(user.id, { pageSize: 2, page: 3 });
+    expect(page3.items).toHaveLength(1);
+  });
+
+  it("includes related account and category names", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "100.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+
+    const result = await TransactionService.listPaginated(user.id, {});
+    expect(result.items[0].accountName).toBe("Test Account");
+    expect(result.items[0].categoryName).toBe("Home");
+  });
+});

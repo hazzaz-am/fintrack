@@ -7,8 +7,30 @@ import type {
   DateRangeFilterInput,
   RecordIncomeOrExpenseInput,
   RecordTransferInput,
+  TransactionSearchInput,
   UpdateTransactionInput,
 } from "@/lib/validation/transaction";
+
+export interface TransactionListItem {
+  id: string;
+  type: string;
+  amount: string;
+  description: string | null;
+  transactionDate: Date;
+  accountId: string | null;
+  accountName: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  sourceAccountName: string | null;
+  destinationAccountName: string | null;
+}
+
+export interface PaginatedTransactions {
+  items: TransactionListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
 
 async function getOwnedTransactionOrThrow(userId: string, transactionId: string) {
   const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
@@ -128,6 +150,72 @@ export const TransactionService = {
       where,
       orderBy: { transactionDate: "desc" },
     });
+  },
+
+  // Additive: new method for the Transactions screen's search/sort/pagination
+  // (transactions-ui spec) — `list` above is untouched and keeps its existing
+  // callers' behavior exactly as-is. Search/sort/pagination happen in the
+  // database query (skip/take/orderBy/contains), not by fetching everything
+  // and slicing in memory, following the same "aggregate in the DB" principle
+  // as getSummary/AnalyticsService.
+  async listPaginated(userId: string, filter: TransactionSearchInput): Promise<PaginatedTransactions> {
+    const where: Prisma.TransactionWhereInput = { userId };
+
+    if (filter.from || filter.to) {
+      where.transactionDate = {
+        ...(filter.from ? { gte: filter.from } : {}),
+        ...(filter.to ? { lte: filter.to } : {}),
+      };
+    }
+    if (filter.type) where.type = filter.type;
+    if (filter.categoryId) where.categoryId = filter.categoryId;
+    if (filter.accountId) {
+      where.OR = [
+        { accountId: filter.accountId },
+        { sourceAccountId: filter.accountId },
+        { destinationAccountId: filter.accountId },
+      ];
+    }
+    if (filter.search) {
+      where.description = { contains: filter.search, mode: "insensitive" };
+    }
+
+    const page = filter.page ?? 1;
+    const pageSize = filter.pageSize ?? 20;
+    const sortBy = filter.sortBy ?? "transactionDate";
+    const sortDir = filter.sortDir ?? "desc";
+
+    const [rows, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        orderBy: { [sortBy]: sortDir },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          account: { select: { name: true } },
+          category: { select: { name: true } },
+          sourceAccount: { select: { name: true } },
+          destinationAccount: { select: { name: true } },
+        },
+      }),
+      prisma.transaction.count({ where }),
+    ]);
+
+    const items: TransactionListItem[] = rows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      amount: row.amount.toString(),
+      description: row.description,
+      transactionDate: row.transactionDate,
+      accountId: row.accountId,
+      accountName: row.account?.name ?? null,
+      categoryId: row.categoryId,
+      categoryName: row.category?.name ?? null,
+      sourceAccountName: row.sourceAccount?.name ?? null,
+      destinationAccountName: row.destinationAccount?.name ?? null,
+    }));
+
+    return { items, total, page, pageSize };
   },
 
   async getSummary(userId: string, range: { from: Date; to: Date }) {

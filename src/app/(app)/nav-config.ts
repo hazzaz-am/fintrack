@@ -20,13 +20,13 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, enabled: false },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, enabled: true },
   { label: "Accounts", href: "/accounts", icon: Wallet, enabled: true },
-  { label: "Transactions", href: "/transactions", icon: ArrowLeftRight, enabled: false },
-  { label: "Income", href: "/income", icon: TrendingUp, enabled: false },
-  { label: "Expenses", href: "/expenses", icon: TrendingDown, enabled: false },
+  { label: "Transactions", href: "/transactions", icon: ArrowLeftRight, enabled: true },
+  { label: "Income", href: "/income", icon: TrendingUp, enabled: true },
+  { label: "Expenses", href: "/expenses", icon: TrendingDown, enabled: true },
   { label: "Savings Goals", href: "/savings-goals", icon: PiggyBank, enabled: false },
   { label: "Investments", href: "/investments", icon: LineChart, enabled: false },
-  { label: "Reports", href: "/reports", icon: ChartColumn, enabled: false },
+  { label: "Reports", href: "/reports", icon: ChartColumn, enabled: true },
   { label: "Settings", href: "/settings", icon: Settings, enabled: false },
 ];
