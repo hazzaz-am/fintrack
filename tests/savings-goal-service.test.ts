@@ -103,4 +103,83 @@ describe("SavingsGoalService", () => {
     expect(status.isOverAllocated).toBe(true);
     expect(status.unallocated).toBe("-3000.00");
   });
+
+  it("updates a goal's name, target amount, target date, and description", async () => {
+    const user = await createTestUser();
+    const goal = await SavingsGoalService.create(user.id, { name: "Travel", targetAmount: "100000.00" });
+
+    const updated = await SavingsGoalService.update(user.id, goal.id, {
+      name: "World Travel",
+      targetAmount: "150000.00",
+      targetDate: new Date("2028-01-01"),
+      description: "Big trip",
+    });
+
+    expect(updated.name).toBe("World Travel");
+    expect(updated.targetAmount.toString()).toBe("150000");
+    expect(updated.targetDate?.toISOString()).toBe(new Date("2028-01-01").toISOString());
+    expect(updated.description).toBe("Big trip");
+  });
+
+  it("allows lowering a goal's target below its already-allocated total, which reports it as achieved", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "10000.00");
+    const goal = await SavingsGoalService.create(user.id, { name: "Travel", targetAmount: "100000.00" });
+    await SavingsGoalService.allocate(user.id, { goalId: goal.id, accountId: account.id, amount: "8000.00" });
+
+    await expect(
+      SavingsGoalService.update(user.id, goal.id, { targetAmount: "5000.00" })
+    ).resolves.not.toThrow();
+
+    const progress = await SavingsGoalService.getProgress(user.id, goal.id);
+    expect(Number(progress.totalAllocated)).toBeGreaterThanOrEqual(Number(progress.goal.targetAmount));
+  });
+
+  it("rejects update and archive for a goal owned by a different user", async () => {
+    const owner = await createTestUser();
+    const otherUser = await createTestUser();
+    const goal = await SavingsGoalService.create(owner.id, { name: "Travel", targetAmount: "100000.00" });
+
+    await expect(
+      SavingsGoalService.update(otherUser.id, goal.id, { name: "Hijacked" })
+    ).rejects.toThrow(AppError);
+    await expect(SavingsGoalService.archive(otherUser.id, goal.id)).rejects.toThrow(AppError);
+  });
+
+  it("archives a goal without touching its existing allocation events", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "500000.00");
+    const goal = await SavingsGoalService.create(user.id, { name: "Marriage", targetAmount: "500000.00" });
+    await SavingsGoalService.allocate(user.id, { goalId: goal.id, accountId: account.id, amount: "180000.00" });
+
+    const eventsBefore = await prisma.goalAllocationEvent.findMany({ where: { savingsGoalId: goal.id } });
+
+    const archived = await SavingsGoalService.archive(user.id, goal.id);
+    expect(archived.status).toBe("ARCHIVED");
+
+    const eventsAfter = await prisma.goalAllocationEvent.findMany({ where: { savingsGoalId: goal.id } });
+    expect(eventsAfter).toEqual(eventsBefore);
+    const progress = await SavingsGoalService.getProgress(user.id, goal.id);
+    expect(progress.totalAllocated).toBe("180000.00");
+  });
+
+  it("reports achieved when crossed via allocate, and not achieved after dropping back below target via moveAllocation", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "10000.00");
+    const marriage = await SavingsGoalService.create(user.id, { name: "Marriage", targetAmount: "5000.00" });
+    const travel = await SavingsGoalService.create(user.id, { name: "Travel", targetAmount: "100000.00" });
+
+    await SavingsGoalService.allocate(user.id, { goalId: marriage.id, accountId: account.id, amount: "5000.00" });
+    let progress = await SavingsGoalService.getProgress(user.id, marriage.id);
+    expect(Number(progress.totalAllocated)).toBeGreaterThanOrEqual(Number(progress.goal.targetAmount));
+
+    await SavingsGoalService.moveAllocation(user.id, {
+      fromGoalId: marriage.id,
+      toGoalId: travel.id,
+      accountId: account.id,
+      amount: "1000.00",
+    });
+    progress = await SavingsGoalService.getProgress(user.id, marriage.id);
+    expect(Number(progress.totalAllocated)).toBeLessThan(Number(progress.goal.targetAmount));
+  });
 });

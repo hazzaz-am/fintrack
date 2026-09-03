@@ -23,6 +23,14 @@ export const moveAllocationSchema = z.object({
   note: z.string().trim().max(300).optional(),
 });
 
+export const updateSavingsGoalSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  targetAmount: zPositiveMoney.optional(),
+  targetDate: z.coerce.date().nullable().optional(),
+  description: z.string().trim().max(500).nullable().optional(),
+});
+
 export type CreateSavingsGoalInput = z.infer<typeof createSavingsGoalSchema>;
 export type AllocateInput = z.infer<typeof allocateSchema>;
 export type MoveAllocationInput = z.infer<typeof moveAllocationSchema>;
+export type UpdateSavingsGoalInput = z.infer<typeof updateSavingsGoalSchema>;

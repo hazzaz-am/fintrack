@@ -2,7 +2,12 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { AccountService, getOwnedAccountOrThrow } from "@/lib/services/account-service";
-import type { AllocateInput, CreateSavingsGoalInput, MoveAllocationInput } from "@/lib/validation/savings-goal";
+import type {
+  AllocateInput,
+  CreateSavingsGoalInput,
+  MoveAllocationInput,
+  UpdateSavingsGoalInput,
+} from "@/lib/validation/savings-goal";
 
 const { Decimal } = Prisma;
 
@@ -143,6 +148,27 @@ export const SavingsGoalService = {
 
   async list(userId: string) {
     return prisma.savingsGoal.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
+  },
+
+  // No cross-check against the allocated total (design.md D3): a target may
+  // freely move below what's already allocated, which just means the goal is
+  // immediately achieved per the derived-achieved-state rule below.
+  async update(userId: string, goalId: string, input: UpdateSavingsGoalInput) {
+    await getOwnedGoalOrThrow(userId, goalId);
+    return prisma.savingsGoal.update({
+      where: { id: goalId },
+      data: input,
+    });
+  },
+
+  // Unconditional, mirroring AccountService.archive (design.md D1): does not
+  // touch existing GoalAllocationEvent rows, and has no un-archive path.
+  async archive(userId: string, goalId: string) {
+    await getOwnedGoalOrThrow(userId, goalId);
+    return prisma.savingsGoal.update({
+      where: { id: goalId },
+      data: { status: "ARCHIVED" },
+    });
   },
 
   /** Surfaces the D3 soft invariant: an account can end up with more allocated than its balance after a retroactive transaction edit. */
