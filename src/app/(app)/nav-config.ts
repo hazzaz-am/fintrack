@@ -26,7 +26,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Income", href: "/income", icon: TrendingUp, enabled: true },
   { label: "Expenses", href: "/expenses", icon: TrendingDown, enabled: true },
   { label: "Savings Goals", href: "/savings-goals", icon: PiggyBank, enabled: false },
-  { label: "Investments", href: "/investments", icon: LineChart, enabled: false },
+  { label: "Investments", href: "/investments", icon: LineChart, enabled: true },
   { label: "Reports", href: "/reports", icon: ChartColumn, enabled: true },
   { label: "Settings", href: "/settings", icon: Settings, enabled: false },
 ];
