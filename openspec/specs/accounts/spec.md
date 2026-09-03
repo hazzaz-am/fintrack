@@ -28,7 +28,7 @@ The system SHALL allow a user to archive an account instead of deleting it, pres
 - **THEN** the account's status becomes archived, it is excluded from "active accounts" totals, and its historical transactions remain queryable
 
 ### Requirement: Derived Account Balance
-The system SHALL compute an account's balance at read time as `openingBalance + income − expenses + incoming transfers − outgoing transfers`, and SHALL NOT persist a mutable balance column that write paths update directly.
+The system SHALL compute an account's balance at read time as `openingBalance + income − expenses + incoming transfers − outgoing transfers − investment contributions + investment returns`, and SHALL NOT persist a mutable balance column that write paths update directly.
 
 #### Scenario: Balance reflects income and expense
 - **WHEN** a user has an account with opening balance ৳0, one income transaction of ৳80,000, and one expense transaction of ৳50,000
@@ -41,6 +41,14 @@ The system SHALL compute an account's balance at read time as `openingBalance + 
 #### Scenario: Balance updates immediately after transaction edit
 - **WHEN** a user edits the amount of a past expense transaction on an account
 - **THEN** the account's computed balance reflects the edited amount on the very next read, with no separate reconciliation step required
+
+#### Scenario: Balance reflects investment contribution
+- **WHEN** a user contributes ৳200,000 from BRAC Bank to an investment
+- **THEN** BRAC Bank's computed balance decreases by ৳200,000, with no change to BRAC Bank's income or expense totals
+
+#### Scenario: Balance reflects investment return
+- **WHEN** an investment matures and ৳216,000 (principal ৳200,000 + profit ৳16,000) is returned to BRAC Bank
+- **THEN** BRAC Bank's computed balance increases by ৳216,000 total, of which only the ৳16,000 profit portion counts toward BRAC Bank's period income total
 
 ### Requirement: List Accounts With Balances
 The system SHALL return all of a user's active accounts together with each account's computed balance in a single request, without an N+1 query per account.

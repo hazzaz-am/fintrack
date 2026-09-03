@@ -6,7 +6,9 @@ export type AppErrorCode =
   | "CONFLICT"
   | "ALLOCATION_EXCEEDS_BALANCE"
   | "INVALID_TRANSFER"
-  | "RATE_LIMITED";
+  | "RATE_LIMITED"
+  | "INVESTMENT_NOT_ACTIVE"
+  | "PRINCIPAL_EXCEEDS_AVAILABLE";
 
 const STATUS_BY_CODE: Record<AppErrorCode, number> = {
   VALIDATION_ERROR: 400,
@@ -17,6 +19,8 @@ const STATUS_BY_CODE: Record<AppErrorCode, number> = {
   ALLOCATION_EXCEEDS_BALANCE: 409,
   INVALID_TRANSFER: 400,
   RATE_LIMITED: 429,
+  INVESTMENT_NOT_ACTIVE: 409,
+  PRINCIPAL_EXCEEDS_AVAILABLE: 409,
 };
 
 export class AppError extends Error {

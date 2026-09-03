@@ -29,3 +29,16 @@ export async function createTestCategory(userId: string, type: "INCOME" | "EXPEN
     data: { userId, name, type },
   });
 }
+
+export async function createTestInvestment(userId: string, openingPrincipal = "0.00") {
+  return prisma.investment.create({
+    data: {
+      userId,
+      name: "Test Investment",
+      type: "FDR",
+      openingPrincipal,
+      startDate: new Date("2026-01-01"),
+      status: Number(openingPrincipal) > 0 ? "ACTIVE" : "PLANNED",
+    },
+  });
+}

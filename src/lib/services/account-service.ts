@@ -20,7 +20,10 @@ export interface AccountWithBalance {
 
 // Computes every account's balance in a single aggregation pass:
 //   balance = openingBalance + income - expense + transfers in - transfers out
-// (design.md D1). No N+1 query per account.
+//           - investment contributions + investment returns
+// (design.md D1, D6). No N+1 query per account. Investment contributions and
+// returns are excluded from income/expense the same way transfers are — see
+// TransactionService/InvestmentService.
 async function computeBalances(userId: string, accountIds?: string[]): Promise<Map<string, string>> {
   const rows = await prisma.$queryRaw<Array<{ accountId: string; balance: string }>>`
     SELECT
@@ -31,6 +34,8 @@ async function computeBalances(userId: string, accountIds?: string[]): Promise<M
         - COALESCE(SUM(CASE WHEN t."type" = 'EXPENSE' AND t."accountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
         + COALESCE(SUM(CASE WHEN t."type" = 'TRANSFER' AND t."destinationAccountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
         - COALESCE(SUM(CASE WHEN t."type" = 'TRANSFER' AND t."sourceAccountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
+        - COALESCE(SUM(CASE WHEN t."type" = 'INVESTMENT_CONTRIBUTION' AND t."accountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
+        + COALESCE(SUM(CASE WHEN t."type" = 'INVESTMENT_RETURN' AND t."accountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
       )::text AS "balance"
     FROM "accounts" a
     LEFT JOIN "transactions" t
