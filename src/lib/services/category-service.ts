@@ -130,11 +130,17 @@ export const CategoryService = {
     // category can never be hard-deleted — reassign those transactions to a
     // different category first. Child categories aren't subject to that
     // constraint and still orphan to top-level via the schema's SetNull cascade.
-    const usageCount = await prisma.transaction.count({ where: { categoryId } });
-    if (usageCount > 0) {
+    const [usageCount, recurringUsageCount] = await Promise.all([
+      prisma.transaction.count({ where: { categoryId } }),
+      prisma.recurringTransaction.count({ where: { categoryId } }),
+    ]);
+    if (usageCount > 0 || recurringUsageCount > 0) {
+      const parts: string[] = [];
+      if (usageCount > 0) parts.push(`${usageCount} transaction${usageCount === 1 ? "" : "s"}`);
+      if (recurringUsageCount > 0) parts.push(`${recurringUsageCount} recurring template${recurringUsageCount === 1 ? "" : "s"}`);
       throw new AppError(
         "CONFLICT",
-        `This category is used by ${usageCount} transaction${usageCount === 1 ? "" : "s"}. Reassign them to a different category before deleting.`
+        `This category is used by ${parts.join(" and ")}. Reassign them to a different category before deleting.`
       );
     }
 

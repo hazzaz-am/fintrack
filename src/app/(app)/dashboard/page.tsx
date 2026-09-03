@@ -5,12 +5,14 @@ import { AnalyticsService } from "@/lib/services/analytics-service";
 import { AccountService } from "@/lib/services/account-service";
 import { CategoryService } from "@/lib/services/category-service";
 import { InvestmentService } from "@/lib/services/investment-service";
+import { RecurringTransactionService } from "@/lib/services/recurring-transaction-service";
 import { resolveDateRange } from "@/lib/date-range";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { RecordTransactionDialog } from "@/components/transactions/record-transaction-dialog";
 import { RecentTransactionsList } from "@/components/transactions/recent-transactions-list";
 import { CategoryBreakdownChart } from "@/components/analytics/category-breakdown-chart";
+import { DueRecurringWidget } from "@/app/(app)/recurring-transactions/due-recurring-widget";
 import { formatMoney } from "@/components/transactions/transaction-format";
 import { cn } from "@/lib/utils";
 
@@ -49,15 +51,17 @@ export default async function DashboardPage() {
   const userId = await requireAuth();
   const range = resolveDateRange("month");
 
-  const [accounts, summary, investmentTotals, upcomingMaturities, expenseBreakdown, recent, categories] = await Promise.all([
-    AccountService.listWithBalances(userId),
-    TransactionService.getSummary(userId, range),
-    InvestmentService.getTotals(userId),
-    InvestmentService.getUpcomingMaturities(userId),
-    AnalyticsService.getCategoryBreakdown(userId, "EXPENSE", range),
-    TransactionService.listPaginated(userId, { pageSize: 8, sortBy: "transactionDate", sortDir: "desc" }),
-    CategoryService.list(userId),
-  ]);
+  const [accounts, summary, investmentTotals, upcomingMaturities, expenseBreakdown, recent, categories, dueRecurring] =
+    await Promise.all([
+      AccountService.listWithBalances(userId),
+      TransactionService.getSummary(userId, range),
+      InvestmentService.getTotals(userId),
+      InvestmentService.getUpcomingMaturities(userId),
+      AnalyticsService.getCategoryBreakdown(userId, "EXPENSE", range),
+      TransactionService.listPaginated(userId, { pageSize: 8, sortBy: "transactionDate", sortDir: "desc" }),
+      CategoryService.list(userId),
+      RecurringTransactionService.getDueTemplates(userId),
+    ]);
 
   const currency = accounts[0]?.currency ?? "BDT";
   const totalBalance = accounts.reduce((sum, account) => sum + Number(account.balance), 0);
@@ -65,6 +69,13 @@ export default async function DashboardPage() {
   const expense = Number(summary.expense);
   // Zero-safe: no income this period means savings rate is shown as 0%, never NaN/Infinity.
   const savingsRate = income > 0 ? ((income - expense) / income) * 100 : 0;
+  const dueRecurringItems = dueRecurring.map((template) => ({
+    id: template.id,
+    name: template.name,
+    amount: template.amount.toString(),
+    slotStart: template.slotStart,
+    description: template.description,
+  }));
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -145,6 +156,15 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Due recurring transactions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DueRecurringWidget items={dueRecurringItems} currency={currency} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
