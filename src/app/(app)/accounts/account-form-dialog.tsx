@@ -3,15 +3,15 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerTrigger,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerClose,
+} from "@/components/ui/drawer";
 import { Field, FieldGroup, FieldLabel, FieldError, FieldDescription } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -71,17 +71,17 @@ export function AccountFormDialog({ trigger, triggerLabel, account }: AccountFor
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={trigger}>{triggerLabel}</DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit account" : "Add account"}</DialogTitle>
-          <DialogDescription>
+    <Drawer open={open} onOpenChange={setOpen}>
+      <DrawerTrigger render={trigger}>{triggerLabel}</DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>{isEdit ? "Edit account" : "Add account"}</DrawerTitle>
+          <DrawerDescription>
             {isEdit
               ? "Update this account's details. Its balance is derived from transactions and can't be edited directly."
               : "Add a place where you keep money — a bank account, mobile wallet, or cash."}
-          </DialogDescription>
-        </DialogHeader>
+          </DrawerDescription>
+        </DrawerHeader>
         {/*
           Keyed on `open` so each open is a fresh mount: the row's `account`
           prop can change out from under this dialog (e.g. this dialog's own
@@ -89,7 +89,8 @@ export function AccountFormDialog({ trigger, triggerLabel, account }: AccountFor
           `defaultValue` on a live uncontrolled input avoids stale field
           values / Base UI's "changing defaultValue after init" warning.
         */}
-        <form key={String(open)} action={formAction}>
+        <form key={String(open)} action={formAction} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="name">Name</FieldLabel>
@@ -132,15 +133,16 @@ export function AccountFormDialog({ trigger, triggerLabel, account }: AccountFor
             </Field>
             {state.error && <p role="alert" className="text-sm font-medium text-destructive">{state.error}</p>}
           </FieldGroup>
-          <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+          </div>
+          <DrawerFooter>
+            <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
             <SubmitButton
               label={isEdit ? "Save changes" : "Add account"}
               pendingLabel={isEdit ? "Saving…" : "Adding…"}
             />
-          </DialogFooter>
+          </DrawerFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   );
 }

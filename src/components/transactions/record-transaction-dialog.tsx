@@ -3,15 +3,15 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerTrigger,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerClose,
+} from "@/components/ui/drawer";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Field, FieldGroup, FieldLabel, FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -81,28 +81,37 @@ export function RecordTransactionDialog({
   const expenseCategories = categories.filter((category) => category.type === "EXPENSE");
 
   return (
-    <Dialog
+    <Drawer
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
         if (next) setKind(defaultType);
       }}
     >
-      <DialogTrigger render={trigger}>{triggerLabel}</DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Record a transaction</DialogTitle>
-          <DialogDescription>Record income, an expense, or a transfer between your own accounts.</DialogDescription>
-        </DialogHeader>
-        <Tabs value={kind} onValueChange={(value) => setKind(value as TransactionKind)}>
-          <TabsList>
+      <DrawerTrigger render={trigger}>{triggerLabel}</DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>Record a transaction</DrawerTitle>
+          <DrawerDescription>Record income, an expense, or a transfer between your own accounts.</DrawerDescription>
+        </DrawerHeader>
+        <Tabs
+          value={kind}
+          onValueChange={(value) => setKind(value as TransactionKind)}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
+          <TabsList className="mx-4 mt-4">
             <TabsTrigger value="EXPENSE">Expense</TabsTrigger>
             <TabsTrigger value="INCOME">Income</TabsTrigger>
             <TabsTrigger value="TRANSFER">Transfer</TabsTrigger>
           </TabsList>
           {/* Keyed on open+kind so each tab/open is a fresh, uncontrolled mount (same rationale as AccountFormDialog). */}
-          <form key={`${String(open)}-${kind}`} action={formAction}>
+          <form
+            key={`${String(open)}-${kind}`}
+            action={formAction}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          >
             <input type="hidden" name="kind" value={kind} />
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <FieldGroup>
               {kind === "TRANSFER" ? (
                 <>
@@ -172,15 +181,16 @@ export function RecordTransactionDialog({
               </Field>
               {state.error && <p role="alert" className="text-sm font-medium text-destructive">{state.error}</p>}
             </FieldGroup>
-            <DialogFooter>
-              <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+            </div>
+            <DrawerFooter>
+              <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
               <SubmitButton
                 label={kind === "TRANSFER" ? "Record transfer" : kind === "INCOME" ? "Record income" : "Record expense"}
               />
-            </DialogFooter>
+            </DrawerFooter>
           </form>
         </Tabs>
-      </DialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   );
 }

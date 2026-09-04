@@ -3,15 +3,15 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerTrigger,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerClose,
+} from "@/components/ui/drawer";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Field, FieldGroup, FieldLabel, FieldError, FieldDescription } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -88,24 +88,29 @@ export function RecurringTransactionFormDialog({
   const filteredCategories = categories.filter((category) => category.type === type);
 
   return (
-    <Dialog
+    <Drawer
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
         if (next) setType(template?.type ?? "EXPENSE");
       }}
     >
-      <DialogTrigger render={trigger}>{triggerLabel}</DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit recurring transaction" : "New recurring transaction"}</DialogTitle>
-          <DialogDescription>
+      <DrawerTrigger render={trigger}>{triggerLabel}</DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>{isEdit ? "Edit recurring transaction" : "New recurring transaction"}</DrawerTitle>
+          <DrawerDescription>
             {isEdit
               ? "Changes only apply to future occurrences — transactions already generated from this template keep their own recorded values."
               : "A repeating income or expense you'll be reminded to confirm each period, like rent or a monthly family payment."}
-          </DialogDescription>
-        </DialogHeader>
-        <form key={`${String(open)}-${isEdit ? "edit" : type}`} action={formAction}>
+          </DrawerDescription>
+        </DrawerHeader>
+        <form
+          key={`${String(open)}-${isEdit ? "edit" : type}`}
+          action={formAction}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="name">Name</FieldLabel>
@@ -197,12 +202,13 @@ export function RecurringTransactionFormDialog({
 
             {state.error && <p role="alert" className="text-sm font-medium text-destructive">{state.error}</p>}
           </FieldGroup>
-          <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+          </div>
+          <DrawerFooter>
+            <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
             <SubmitButton isEdit={isEdit} />
-          </DialogFooter>
+          </DrawerFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   );
 }

@@ -3,15 +3,15 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerTrigger,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerClose,
+} from "@/components/ui/drawer";
 import { Field, FieldGroup, FieldLabel, FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -69,18 +69,19 @@ export function SavingsGoalFormDialog({ trigger, triggerLabel, goal }: SavingsGo
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={trigger}>{triggerLabel}</DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit goal" : "New savings goal"}</DialogTitle>
-          <DialogDescription>
+    <Drawer open={open} onOpenChange={setOpen}>
+      <DrawerTrigger render={trigger}>{triggerLabel}</DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>{isEdit ? "Edit goal" : "New savings goal"}</DrawerTitle>
+          <DrawerDescription>
             {isEdit
               ? "Update this goal's name, target, or target date. It won't affect money already allocated to it."
               : "Set a target for something you're saving for. Fund it from your accounts afterward."}
-          </DialogDescription>
-        </DialogHeader>
-        <form key={String(open)} action={formAction}>
+          </DrawerDescription>
+        </DrawerHeader>
+        <form key={String(open)} action={formAction} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="name">Name</FieldLabel>
@@ -111,12 +112,13 @@ export function SavingsGoalFormDialog({ trigger, triggerLabel, goal }: SavingsGo
             </Field>
             {state.error && <p role="alert" className="text-sm font-medium text-destructive">{state.error}</p>}
           </FieldGroup>
-          <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+          </div>
+          <DrawerFooter>
+            <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
             <SubmitButton label={isEdit ? "Save changes" : "Create goal"} pendingLabel={isEdit ? "Saving…" : "Creating…"} />
-          </DialogFooter>
+          </DrawerFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   );
 }

@@ -3,15 +3,15 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerTrigger,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerClose,
+} from "@/components/ui/drawer";
 import { Field, FieldGroup, FieldLabel, FieldError, FieldDescription } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -60,18 +60,19 @@ export function EditTransactionDialog({
   const relevantCategories = categories.filter((category) => category.type === transaction.type);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={trigger}>{triggerLabel}</DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit transaction</DialogTitle>
-          <DialogDescription>
+    <Drawer open={open} onOpenChange={setOpen}>
+      <DrawerTrigger render={trigger}>{triggerLabel}</DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>Edit transaction</DrawerTitle>
+          <DrawerDescription>
             {isTransfer
               ? "Transfers and investment movements have no category — you can still adjust the amount, date, and description."
               : "Update this transaction's amount, category, date, or description."}
-          </DialogDescription>
-        </DialogHeader>
-        <form key={String(open)} action={formAction}>
+          </DrawerDescription>
+        </DrawerHeader>
+        <form key={String(open)} action={formAction} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <FieldGroup>
             {!isTransfer && (
               <Field>
@@ -109,12 +110,13 @@ export function EditTransactionDialog({
             </Field>
             {state.error && <p role="alert" className="text-sm font-medium text-destructive">{state.error}</p>}
           </FieldGroup>
-          <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+          </div>
+          <DrawerFooter>
+            <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
             <SubmitButton />
-          </DialogFooter>
+          </DrawerFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   );
 }

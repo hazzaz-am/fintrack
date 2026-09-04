@@ -3,15 +3,15 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerTrigger,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerClose,
+} from "@/components/ui/drawer";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Field, FieldGroup, FieldLabel, FieldError, FieldDescription } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -85,26 +85,31 @@ export function InvestmentFormDialog({ trigger, triggerLabel, accounts, investme
   }
 
   return (
-    <Dialog
+    <Drawer
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
         if (next) setFundingMode("fund");
       }}
     >
-      <DialogTrigger render={trigger}>{triggerLabel}</DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit investment" : "New investment"}</DialogTitle>
-          <DialogDescription>
+      <DrawerTrigger render={trigger}>{triggerLabel}</DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>{isEdit ? "Edit investment" : "New investment"}</DrawerTitle>
+          <DrawerDescription>
             {isEdit
               ? "Update this investment's details. Its type, start date, and principal aren't editable here — record a contribution or maturity/withdrawal to change principal."
               : "Record an FDR, DPS, stocks, or any other investment you're tracking."}
-          </DialogDescription>
-        </DialogHeader>
+          </DrawerDescription>
+        </DrawerHeader>
         {/* Keyed on open+fundingMode so each open/mode is a fresh, uncontrolled mount (same rationale as AccountFormDialog / RecordTransactionDialog). */}
-        <form key={`${String(open)}-${isEdit ? "edit" : fundingMode}`} action={formAction}>
+        <form
+          key={`${String(open)}-${isEdit ? "edit" : fundingMode}`}
+          action={formAction}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
           {!isEdit && <input type="hidden" name="fundingMode" value={fundingMode} />}
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="name">Name</FieldLabel>
@@ -258,15 +263,16 @@ export function InvestmentFormDialog({ trigger, triggerLabel, accounts, investme
 
             {state.error && <p role="alert" className="text-sm font-medium text-destructive">{state.error}</p>}
           </FieldGroup>
-          <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+          </div>
+          <DrawerFooter>
+            <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
             <SubmitButton
               label={isEdit ? "Save changes" : "Create investment"}
               pendingLabel={isEdit ? "Saving…" : "Creating…"}
             />
-          </DialogFooter>
+          </DrawerFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   );
 }
