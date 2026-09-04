@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 px-4">
           <SidebarTrigger className="rounded-full" />
-          <Separator orientation="vertical" className="h-4" />
+          <Separator orientation="vertical" className="h-4" style={{ alignSelf: "center" }} />
           <span className="text-sm font-medium text-muted-foreground">FinTrack</span>
         </header>
         <div className="flex flex-1 flex-col gap-4 rounded-t-3xl bg-background p-4 md:p-6">
