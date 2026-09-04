@@ -44,3 +44,10 @@ The Expenses screen SHALL provide a quick-add action to record a new expense tra
 #### Scenario: Quick-add expense
 - **WHEN** the user records an expense transaction via the Expenses screen's quick-add action
 - **THEN** the transaction is created and the period's total expenses and breakdown update to include it
+
+### Requirement: Expenses screen remains usable at phone widths
+The expenses list and its filter/entry forms SHALL remain fully usable at phone widths without horizontal scrolling or clipped amounts.
+
+#### Scenario: Expenses screen viewed at 375px width
+- **WHEN** the Expenses screen is loaded at a 375px viewport width
+- **THEN** the expense list rows and any filter controls remain fully visible and operable without horizontal scrolling

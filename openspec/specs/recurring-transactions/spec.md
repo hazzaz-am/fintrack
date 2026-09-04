@@ -89,3 +89,10 @@ The system SHALL allow a user to deactivate (archive) a template. A deactivated 
 #### Scenario: Deactivating a template with transaction history
 - **WHEN** the user deactivates a template that has previously generated transactions
 - **THEN** the template no longer appears in the due list, and its previously generated transactions remain unchanged in the Transactions list
+
+### Requirement: Recurring transactions screen remains usable at phone widths
+The recurring transaction template list and its create/edit forms SHALL remain fully usable at phone widths without horizontal scrolling or clipped amounts.
+
+#### Scenario: Recurring transactions screen viewed at 375px width
+- **WHEN** the Recurring Transactions screen is loaded at a 375px viewport width
+- **THEN** each template row and the due-recurring confirmation controls remain fully visible and operable without horizontal scrolling

@@ -87,3 +87,10 @@ The sidebar navigation entry for Savings Goals SHALL be enabled, linking to `/sa
 #### Scenario: Navigating to Savings Goals
 - **WHEN** an authenticated user clicks "Savings Goals" in the sidebar
 - **THEN** they are taken to `/savings-goals`, which renders without error
+
+### Requirement: Savings goals screen remains usable at phone widths
+The savings goal list and its create/contribute forms SHALL remain fully usable at phone widths without horizontal scrolling or clipped progress figures.
+
+#### Scenario: Savings goals screen viewed at 375px width
+- **WHEN** the Savings Goals screen is loaded at a 375px viewport width
+- **THEN** each goal's name, progress, and target amount remain visible without clipping, and the create/contribute forms present as single-column
