@@ -363,6 +363,33 @@ function getPayloadConfigFromPayload(
   return configLabelKey in config ? config[configLabelKey] : config[key]
 }
 
+function ChartHatchPattern({
+  id,
+  color = "currentColor",
+  background = "transparent",
+  size = 8,
+}: {
+  id: string
+  color?: string
+  background?: string
+  size?: number
+}) {
+  return (
+    <defs>
+      <pattern
+        id={id}
+        patternUnits="userSpaceOnUse"
+        width={size}
+        height={size}
+        patternTransform="rotate(45)"
+      >
+        <rect width={size} height={size} fill={background} />
+        <line x1="0" y1="0" x2="0" y2={size} stroke={color} strokeWidth={size / 2.5} />
+      </pattern>
+    </defs>
+  )
+}
+
 export {
   ChartContainer,
   ChartTooltip,
@@ -370,4 +397,5 @@ export {
   ChartLegend,
   ChartLegendContent,
   ChartStyle,
+  ChartHatchPattern,
 }

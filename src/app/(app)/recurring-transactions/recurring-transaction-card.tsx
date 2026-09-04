@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { Pencil, Repeat } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,10 +53,17 @@ export function RecurringTransactionCard({
   return (
     <Card className={cn(inactive && "opacity-70")}>
       <CardHeader>
-        <CardTitle>{template.name}</CardTitle>
-        <CardDescription>
-          {template.accountName} · {template.categoryName}
-        </CardDescription>
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <Repeat className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <CardTitle>{template.name}</CardTitle>
+            <CardDescription>
+              {template.accountName} · {template.categoryName}
+            </CardDescription>
+          </div>
+        </div>
         {!inactive && (
           <CardAction className="flex gap-1">
             <RecurringTransactionFormDialog

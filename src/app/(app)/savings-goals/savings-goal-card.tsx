@@ -1,4 +1,4 @@
-import { Pencil, Wallet, ArrowRightLeft, AlertTriangle } from "lucide-react";
+import { Pencil, Wallet, ArrowRightLeft, AlertTriangle, PiggyBank } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, CardAction } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,11 +62,18 @@ export function SavingsGoalCard({
   return (
     <Card className={cn(archived && "opacity-70")}>
       <CardHeader>
-        <CardTitle>{goal.name}</CardTitle>
-        <CardDescription>
-          {formatMoney(goal.totalAllocated, currency)} of {formatMoney(goal.targetAmount, currency)}
-          {targetDate ? ` · Target ${targetDate}` : ""}
-        </CardDescription>
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <PiggyBank className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <CardTitle>{goal.name}</CardTitle>
+            <CardDescription>
+              {formatMoney(goal.totalAllocated, currency)} / {formatMoney(goal.targetAmount, currency)}
+              {targetDate ? ` · ${targetDate}` : ""}
+            </CardDescription>
+          </div>
+        </div>
         {!archived && (
           <CardAction>
             <SavingsGoalFormDialog

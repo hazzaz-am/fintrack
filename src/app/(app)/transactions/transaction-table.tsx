@@ -1,7 +1,6 @@
-import { Pencil, ArrowLeftRight, Plus } from "lucide-react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { Pencil, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ListRow } from "@/components/ui/list-row";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 import type { TransactionListItem } from "@/lib/services/transaction-service";
@@ -51,57 +50,54 @@ export function TransactionTable({
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Date</TableHead>
-          <TableHead>Account</TableHead>
-          <TableHead>Description</TableHead>
-          <TableHead>Category</TableHead>
-          <TableHead>Type</TableHead>
-          <TableHead className="text-right">Amount</TableHead>
-          <TableHead className="w-0">
-            <span className="sr-only">Actions</span>
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {transactions.map((transaction) => {
-          const amount = Number(transaction.amount);
-          const isIncome = transaction.type === "INCOME";
-          const isExpense = transaction.type === "EXPENSE";
-          const accountLabel =
-            transaction.type === "TRANSFER"
-              ? `${transaction.sourceAccountName ?? "?"} → ${transaction.destinationAccountName ?? "?"}`
-              : (transaction.accountName ?? "—");
+    <ul className="flex flex-col divide-y divide-border">
+      {transactions.map((transaction) => {
+        const amount = Number(transaction.amount);
+        const isIncome = transaction.type === "INCOME";
+        const isExpense = transaction.type === "EXPENSE";
+        const accountLabel =
+          transaction.type === "TRANSFER"
+            ? `${transaction.sourceAccountName ?? "?"} → ${transaction.destinationAccountName ?? "?"}`
+            : (transaction.accountName ?? "—");
+        const subtitleParts = [
+          formatTransactionDate(transaction.transactionDate),
+          accountLabel,
+          transaction.categoryName ?? formatTransactionType(transaction.type),
+        ].filter(Boolean);
 
-          return (
-            <TableRow
-              key={transaction.id}
-              id={`transaction-${transaction.id}`}
-              className={cn(highlightId === transaction.id && "bg-primary/5 ring-1 ring-inset ring-primary/30")}
-            >
-              <TableCell className="whitespace-nowrap text-muted-foreground">
-                {formatTransactionDate(transaction.transactionDate)}
-              </TableCell>
-              <TableCell>{accountLabel}</TableCell>
-              <TableCell className="max-w-48 truncate">{transaction.description || "—"}</TableCell>
-              <TableCell className="text-muted-foreground">{transaction.categoryName ?? "—"}</TableCell>
-              <TableCell>
-                <Badge variant="outline">{formatTransactionType(transaction.type)}</Badge>
-              </TableCell>
-              <TableCell
-                className={cn(
-                  "text-right font-medium tabular-nums",
-                  isIncome && "text-positive",
-                  isExpense && "text-negative"
-                )}
-              >
-                {isIncome ? "+" : isExpense ? "−" : ""}
-                {formatMoney(Math.abs(amount).toFixed(2), currency)}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center justify-end gap-1">
+        return (
+          <li
+            key={transaction.id}
+            id={`transaction-${transaction.id}`}
+            className={cn(
+              "-mx-2 rounded-2xl px-2",
+              highlightId === transaction.id && "bg-primary/5 ring-1 ring-inset ring-primary/30"
+            )}
+          >
+            <ListRow
+              icon={
+                transaction.type === "TRANSFER" ? (
+                  <ArrowLeftRight />
+                ) : isIncome ? (
+                  <ArrowDownLeft />
+                ) : (
+                  <ArrowUpRight />
+                )
+              }
+              title={transaction.description || accountLabel}
+              subtitle={subtitleParts.join(" · ")}
+              trailing={
+                <div className="flex items-center gap-1">
+                  <span
+                    className={cn(
+                      "tabular-nums",
+                      isIncome && "text-positive",
+                      isExpense && "text-negative"
+                    )}
+                  >
+                    {isIncome ? "+" : isExpense ? "−" : ""}
+                    {formatMoney(Math.abs(amount).toFixed(2), currency)}
+                  </span>
                   <EditTransactionDialog
                     transaction={transaction}
                     categories={categories}
@@ -110,11 +106,11 @@ export function TransactionTable({
                   />
                   <DeleteTransactionDialog transactionId={transaction.id} label={transaction.description || "transaction"} />
                 </div>
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+              }
+            />
+          </li>
+        );
+      })}
+    </ul>
   );
 }

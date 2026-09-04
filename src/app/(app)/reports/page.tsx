@@ -4,8 +4,10 @@ import { AnalyticsService } from "@/lib/services/analytics-service";
 import { AccountService } from "@/lib/services/account-service";
 import { InvestmentService } from "@/lib/services/investment-service";
 import { resolveDateRange, isDateRangePeriod, type DateRangePeriod } from "@/lib/date-range";
+import { Wallet, LineChart } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ListRow } from "@/components/ui/list-row";
 import { PeriodSelectForm } from "@/components/analytics/period-select-form";
 import { formatMoney } from "@/components/transactions/transaction-format";
 import { cn } from "@/lib/utils";
@@ -135,21 +137,26 @@ export default async function ReportsPage({
               {accounts.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No accounts yet.</p>
               ) : (
-                <ul className="flex flex-col gap-2 text-sm">
+                <ul className="flex flex-col divide-y divide-border">
                   {accounts.map((account) => {
                     const balance = Number(account.balance);
                     return (
-                      <li key={account.id} className="flex items-center justify-between">
-                        <span>{account.name}</span>
-                        <span
-                          className={cn(
-                            "font-medium tabular-nums",
-                            balance > 0 && "text-positive",
-                            balance < 0 && "text-negative"
-                          )}
-                        >
-                          {formatMoney(account.balance, account.currency)}
-                        </span>
+                      <li key={account.id}>
+                        <ListRow
+                          icon={<Wallet />}
+                          title={account.name}
+                          trailing={
+                            <span
+                              className={cn(
+                                "tabular-nums",
+                                balance > 0 && "text-positive",
+                                balance < 0 && "text-negative"
+                              )}
+                            >
+                              {formatMoney(account.balance, account.currency)}
+                            </span>
+                          }
+                        />
                       </li>
                     );
                   })}
@@ -202,20 +209,25 @@ export default async function ReportsPage({
               {upcomingMaturities.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No upcoming maturities.</p>
               ) : (
-                <ul className="flex flex-col gap-2 text-sm">
+                <ul className="flex flex-col divide-y divide-border">
                   {upcomingMaturities.map((investment) => (
-                    <li key={investment.id} className="flex items-center justify-between">
-                      <span>{investment.name}</span>
-                      <span
-                        className={cn(
-                          "tabular-nums",
-                          investment.daysUntilMaturity < 0 ? "text-negative" : "text-muted-foreground"
-                        )}
-                      >
-                        {investment.daysUntilMaturity < 0
-                          ? `Overdue by ${Math.abs(investment.daysUntilMaturity)} days`
-                          : `Matures in ${investment.daysUntilMaturity} days`}
-                      </span>
+                    <li key={investment.id}>
+                      <ListRow
+                        icon={<LineChart />}
+                        title={investment.name}
+                        trailing={
+                          <span
+                            className={cn(
+                              "tabular-nums",
+                              investment.daysUntilMaturity < 0 ? "text-negative" : "text-muted-foreground"
+                            )}
+                          >
+                            {investment.daysUntilMaturity < 0
+                              ? `Overdue by ${Math.abs(investment.daysUntilMaturity)} days`
+                              : `Matures in ${investment.daysUntilMaturity} days`}
+                          </span>
+                        }
+                      />
                     </li>
                   ))}
                 </ul>

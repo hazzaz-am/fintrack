@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth/require-auth";
 import { SavingsGoalService } from "@/lib/services/savings-goal-service";
 import { AccountService } from "@/lib/services/account-service";
 import { Button } from "@/components/ui/button";
+import { formatMoney } from "@/components/transactions/transaction-format";
 import { SavingsGoalFormDialog } from "./savings-goal-form-dialog";
 import { SavingsGoalList } from "./savings-goal-list";
 import type { SavingsGoalCardData } from "./savings-goal-card";
@@ -61,27 +62,34 @@ export default async function SavingsGoalsPage() {
 
   const dialogAccounts = accounts.map((account) => ({ id: account.id, name: account.name, currency: account.currency }));
   const currency = accounts[0]?.currency ?? "BDT";
+  const totalSaving = cards
+    .filter((goal) => goal.status !== "ARCHIVED")
+    .reduce((sum, goal) => sum + Number(goal.totalAllocated), 0);
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-xl font-semibold tracking-tight">Savings Goals</h1>
-          <p className="text-sm text-muted-foreground">
-            Set aside money within your accounts for marriage, travel, emergencies, or anything else you&apos;re saving for.
-          </p>
-        </div>
-        {cards.length > 0 && (
-          <SavingsGoalFormDialog
-            trigger={<Button />}
-            triggerLabel={
-              <>
-                <Plus /> New goal
-              </>
-            }
-          />
-        )}
+      <div>
+        <h1 className="font-heading text-xl font-semibold tracking-tight">Savings Goals</h1>
+        <p className="text-sm text-muted-foreground">
+          Set aside money within your accounts for marriage, travel, emergencies, or anything else you&apos;re saving for.
+        </p>
       </div>
+      {cards.length > 0 && (
+        <div>
+          <p className="text-sm text-muted-foreground">Total saving</p>
+          <div className="text-3xl font-semibold tabular-nums">{formatMoney(totalSaving.toFixed(2), currency)}</div>
+        </div>
+      )}
+      {cards.length > 0 && (
+        <SavingsGoalFormDialog
+          trigger={<Button className="w-full sm:w-fit" />}
+          triggerLabel={
+            <>
+              <Plus /> New goal
+            </>
+          }
+        />
+      )}
       <SavingsGoalList goals={cards} accounts={dialogAccounts} currency={currency} />
     </div>
   );

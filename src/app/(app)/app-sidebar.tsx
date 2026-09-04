@@ -55,7 +55,11 @@ export function AppSidebar({ user }: { user: PublicUser }) {
                 }
                 return (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton isActive={isActive} render={<Link href={item.href} />}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      render={<Link href={item.href} />}
+                      className="data-active:rounded-full"
+                    >
                       <item.icon />
                       <span>{item.label}</span>
                     </SidebarMenuButton>

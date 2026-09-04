@@ -1,7 +1,7 @@
 import { Pencil, Plus, Wallet } from "lucide-react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ListRow } from "@/components/ui/list-row";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 import type { AccountWithBalance } from "@/lib/services/account-service";
 import { AccountFormDialog } from "./account-form-dialog";
@@ -37,48 +37,36 @@ export function AccountList({ accounts }: { accounts: AccountWithBalance[] }) {
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>Type</TableHead>
-          <TableHead>Currency</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Balance</TableHead>
-          <TableHead className="w-0">
-            <span className="sr-only">Actions</span>
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {accounts.map((account) => {
-          const balance = Number(account.balance);
-          return (
-            <TableRow key={account.id}>
-              <TableCell>
-                <div className="font-medium">{account.name}</div>
-                {account.institution && (
-                  <div className="text-xs text-muted-foreground">{account.institution}</div>
-                )}
-              </TableCell>
-              <TableCell className="text-muted-foreground">{formatAccountType(account.type)}</TableCell>
-              <TableCell className="text-muted-foreground">{account.currency}</TableCell>
-              <TableCell>
-                <Badge variant="outline" className="capitalize">
-                  {account.status.toLowerCase()}
-                </Badge>
-              </TableCell>
-              <TableCell
-                className={cn(
-                  "text-right font-medium tabular-nums",
-                  balance > 0 && "text-positive",
-                  balance < 0 && "text-negative"
-                )}
-              >
-                {formatMoney(account.balance, account.currency)}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center justify-end gap-1">
+    <ul className="flex flex-col divide-y divide-border">
+      {accounts.map((account) => {
+        const balance = Number(account.balance);
+        const subtitleParts = [
+          formatAccountType(account.type),
+          account.currency,
+          account.institution ?? undefined,
+        ].filter(Boolean);
+        return (
+          <li key={account.id}>
+            <ListRow
+              icon={<Wallet />}
+              title={account.name}
+              subtitle={subtitleParts.join(" · ")}
+              trailing={
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-end gap-1">
+                    <span
+                      className={cn(
+                        "tabular-nums",
+                        balance > 0 && "text-positive",
+                        balance < 0 && "text-negative"
+                      )}
+                    >
+                      {formatMoney(account.balance, account.currency)}
+                    </span>
+                    <Badge variant="outline" className="capitalize">
+                      {account.status.toLowerCase()}
+                    </Badge>
+                  </div>
                   <AccountFormDialog
                     account={{
                       id: account.id,
@@ -93,11 +81,11 @@ export function AccountList({ accounts }: { accounts: AccountWithBalance[] }) {
                   />
                   <ArchiveAccountDialog accountId={account.id} accountName={account.name} />
                 </div>
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+              }
+            />
+          </li>
+        );
+      })}
+    </ul>
   );
 }

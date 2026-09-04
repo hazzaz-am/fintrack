@@ -14,12 +14,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <SidebarProvider>
       <AppSidebar user={user} />
       <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger />
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 px-4">
+          <SidebarTrigger className="rounded-full" />
           <Separator orientation="vertical" className="h-4" />
           <span className="text-sm font-medium text-muted-foreground">FinTrack</span>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">{children}</div>
+        <div className="flex flex-1 flex-col gap-4 rounded-t-3xl bg-background p-4 md:p-6">
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

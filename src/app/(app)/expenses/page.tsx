@@ -130,12 +130,12 @@ export default async function ExpensesPage({
             )}
           </CardContent>
         </Card>
-        <Card>
+        <Card highlight>
           <CardHeader>
             <CardTitle>Last 6 months</CardTitle>
           </CardHeader>
           <CardContent>
-            <TrendChart data={trend} />
+            <TrendChart data={trend} variant="hero" />
           </CardContent>
         </Card>
       </div>

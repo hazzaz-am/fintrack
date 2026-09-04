@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Inbox } from "lucide-react";
+import { Inbox, ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
+import { ListRow } from "@/components/ui/list-row";
 import { cn } from "@/lib/utils";
 import type { TransactionListItem } from "@/lib/services/transaction-service";
 import { formatMoney, formatTransactionDate, formatTransactionType } from "./transaction-format";
@@ -32,7 +33,7 @@ export function RecentTransactionsList({
   }
 
   return (
-    <ul className="divide-y divide-border">
+    <ul className="flex flex-col divide-y divide-border">
       {transactions.map((transaction) => {
         const amount = Number(transaction.amount);
         const isExpense = transaction.type === "EXPENSE";
@@ -46,25 +47,36 @@ export function RecentTransactionsList({
           <li key={transaction.id}>
             <Link
               href={`/transactions?highlight=${transaction.id}`}
-              className="flex items-center justify-between gap-4 py-2.5 text-sm hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none rounded-md px-2 -mx-2"
+              className="-mx-2 block rounded-2xl px-2 hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
             >
-              <div className="min-w-0">
-                <div className="truncate font-medium">{transaction.description || label}</div>
-                <div className="text-xs text-muted-foreground">
-                  {formatTransactionDate(transaction.transactionDate)}
-                  {transaction.accountName ? ` · ${transaction.accountName}` : ""}
-                </div>
-              </div>
-              <div
-                className={cn(
-                  "shrink-0 font-medium tabular-nums",
-                  isIncome && "text-positive",
-                  isExpense && "text-negative"
-                )}
-              >
-                {isIncome ? "+" : isExpense ? "−" : ""}
-                {formatMoney(Math.abs(amount).toFixed(2), currency)}
-              </div>
+              <ListRow
+                icon={
+                  transaction.type === "TRANSFER" ? (
+                    <ArrowLeftRight />
+                  ) : isIncome ? (
+                    <ArrowDownLeft />
+                  ) : (
+                    <ArrowUpRight />
+                  )
+                }
+                title={transaction.description || label}
+                subtitle={
+                  formatTransactionDate(transaction.transactionDate) +
+                  (transaction.accountName ? ` · ${transaction.accountName}` : "")
+                }
+                trailing={
+                  <span
+                    className={cn(
+                      "tabular-nums",
+                      isIncome && "text-positive",
+                      isExpense && "text-negative"
+                    )}
+                  >
+                    {isIncome ? "+" : isExpense ? "−" : ""}
+                    {formatMoney(Math.abs(amount).toFixed(2), currency)}
+                  </span>
+                }
+              />
             </Link>
           </li>
         );

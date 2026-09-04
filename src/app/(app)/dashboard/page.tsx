@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus, Wallet, LineChart } from "lucide-react";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { TransactionService } from "@/lib/services/transaction-service";
 import { AnalyticsService } from "@/lib/services/analytics-service";
@@ -6,12 +6,14 @@ import { AccountService } from "@/lib/services/account-service";
 import { CategoryService } from "@/lib/services/category-service";
 import { InvestmentService } from "@/lib/services/investment-service";
 import { RecurringTransactionService } from "@/lib/services/recurring-transaction-service";
-import { resolveDateRange } from "@/lib/date-range";
+import { resolveDateRange, trailingMonthsRange } from "@/lib/date-range";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { ListRow } from "@/components/ui/list-row";
 import { RecordTransactionDialog } from "@/components/transactions/record-transaction-dialog";
 import { RecentTransactionsList } from "@/components/transactions/recent-transactions-list";
 import { CategoryBreakdownChart } from "@/components/analytics/category-breakdown-chart";
+import { TrendChart } from "@/components/analytics/trend-chart";
 import { DueRecurringWidget } from "@/app/(app)/recurring-transactions/due-recurring-widget";
 import { formatMoney } from "@/components/transactions/transaction-format";
 import { cn } from "@/lib/utils";
@@ -51,7 +53,7 @@ export default async function DashboardPage() {
   const userId = await requireAuth();
   const range = resolveDateRange("month");
 
-  const [accounts, summary, investmentTotals, upcomingMaturities, expenseBreakdown, recent, categories, dueRecurring] =
+  const [accounts, summary, investmentTotals, upcomingMaturities, expenseBreakdown, recent, categories, dueRecurring, trend] =
     await Promise.all([
       AccountService.listWithBalances(userId),
       TransactionService.getSummary(userId, range),
@@ -61,6 +63,7 @@ export default async function DashboardPage() {
       TransactionService.listPaginated(userId, { pageSize: 8, sortBy: "transactionDate", sortDir: "desc" }),
       CategoryService.list(userId),
       RecurringTransactionService.getDueTemplates(userId),
+      AnalyticsService.getMonthlyTrend(userId, trailingMonthsRange(6)),
     ]);
 
   const currency = accounts[0]?.currency ?? "BDT";
@@ -98,8 +101,17 @@ export default async function DashboardPage() {
         )}
       </div>
 
+      <Card highlight>
+        <CardHeader>
+          <CardDescription className="text-highlight-foreground/70">Total balance</CardDescription>
+          <div className="text-3xl font-semibold tabular-nums">{formatMoney(totalBalance.toFixed(2), currency)}</div>
+        </CardHeader>
+        <CardContent>
+          <TrendChart data={trend} variant="hero" />
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="Total balance" value={formatMoney(totalBalance.toFixed(2), currency)} />
         <MetricCard label="Income this month" value={formatMoney(summary.income, currency)} tone="positive" />
         <MetricCard label="Expenses this month" value={formatMoney(summary.expense, currency)} tone="negative" />
         <MetricCard
@@ -121,21 +133,26 @@ export default async function DashboardPage() {
             {accounts.length === 0 ? (
               <p className="text-sm text-muted-foreground">No accounts yet.</p>
             ) : (
-              <ul className="flex flex-col gap-2 text-sm">
+              <ul className="flex flex-col divide-y divide-border">
                 {accounts.map((account) => {
                   const balance = Number(account.balance);
                   return (
-                    <li key={account.id} className="flex items-center justify-between">
-                      <span>{account.name}</span>
-                      <span
-                        className={cn(
-                          "font-medium tabular-nums",
-                          balance > 0 && "text-positive",
-                          balance < 0 && "text-negative"
-                        )}
-                      >
-                        {formatMoney(account.balance, account.currency)}
-                      </span>
+                    <li key={account.id}>
+                      <ListRow
+                        icon={<Wallet />}
+                        title={account.name}
+                        trailing={
+                          <span
+                            className={cn(
+                              "tabular-nums",
+                              balance > 0 && "text-positive",
+                              balance < 0 && "text-negative"
+                            )}
+                          >
+                            {formatMoney(account.balance, account.currency)}
+                          </span>
+                        }
+                      />
                     </li>
                   );
                 })}
@@ -174,27 +191,25 @@ export default async function DashboardPage() {
           {upcomingMaturities.length === 0 ? (
             <p className="text-sm text-muted-foreground">No upcoming maturities.</p>
           ) : (
-            <ul className="flex flex-col gap-2 text-sm">
+            <ul className="flex flex-col divide-y divide-border">
               {upcomingMaturities.map((investment) => (
-                <li key={investment.id} className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">{investment.name}</div>
-                    <div
-                      className={cn(
-                        "text-xs",
-                        investment.daysUntilMaturity < 0 ? "text-negative" : "text-muted-foreground"
-                      )}
-                    >
-                      {investment.daysUntilMaturity < 0
-                        ? `Overdue by ${Math.abs(investment.daysUntilMaturity)} days`
-                        : `Matures in ${investment.daysUntilMaturity} days`}
-                    </div>
-                  </div>
-                  {investment.expectedReturnAmount && (
-                    <span className="tabular-nums text-muted-foreground">
-                      {formatMoney(investment.expectedReturnAmount.toString(), currency)}
-                    </span>
-                  )}
+                <li key={investment.id}>
+                  <ListRow
+                    icon={<LineChart />}
+                    title={investment.name}
+                    subtitle={
+                      <span className={cn(investment.daysUntilMaturity < 0 && "text-negative")}>
+                        {investment.daysUntilMaturity < 0
+                          ? `Overdue by ${Math.abs(investment.daysUntilMaturity)} days`
+                          : `Matures in ${investment.daysUntilMaturity} days`}
+                      </span>
+                    }
+                    trailing={
+                      investment.expectedReturnAmount
+                        ? formatMoney(investment.expectedReturnAmount.toString(), currency)
+                        : undefined
+                    }
+                  />
                 </li>
               ))}
             </ul>

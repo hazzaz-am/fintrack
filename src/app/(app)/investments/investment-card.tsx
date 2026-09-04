@@ -1,4 +1,4 @@
-import { Pencil, Wallet, HandCoins } from "lucide-react";
+import { Pencil, Wallet, HandCoins, LineChart } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, CardAction } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,11 +61,18 @@ export function InvestmentCard({
   return (
     <Card className={cn(closed && "opacity-70")}>
       <CardHeader>
-        <CardTitle>{investment.name}</CardTitle>
-        <CardDescription>
-          {formatInvestmentType(investment.type)}
-          {investment.institution ? ` · ${investment.institution}` : ""}
-        </CardDescription>
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <LineChart className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <CardTitle>{investment.name}</CardTitle>
+            <CardDescription>
+              {formatInvestmentType(investment.type)}
+              {investment.institution ? ` · ${investment.institution}` : ""}
+            </CardDescription>
+          </div>
+        </div>
         {!closed && (
           <CardAction>
             <InvestmentFormDialog
