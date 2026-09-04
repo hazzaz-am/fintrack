@@ -18,7 +18,7 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
+    <div className="flex flex-1 flex-col gap-4">
       <div>
         <h1 className="font-heading text-xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">Manage your profile and the categories you record transactions under.</p>

@@ -117,7 +117,7 @@ export default async function ExpensesPage({
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid items-start gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>By category</CardTitle>

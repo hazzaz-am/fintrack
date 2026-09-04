@@ -120,11 +120,14 @@ export default async function DashboardPage() {
           tone={income - expense >= 0 ? "positive" : "negative"}
         />
         <MetricCard label="Savings rate" value={`${savingsRate.toFixed(1)}%`} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <MetricCard label="Total invested" value={formatMoney(investmentTotals.totalInvested, currency)} />
         <MetricCard label="Expected profit" value={formatMoney(investmentTotals.expectedProfit, currency)} />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid items-start gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Accounts</CardTitle>
