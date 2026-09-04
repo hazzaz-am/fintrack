@@ -46,7 +46,7 @@ export default async function RecurringTransactionsPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-xl font-semibold tracking-tight">Recurring Transactions</h1>
           <p className="text-sm text-muted-foreground">
@@ -54,16 +54,18 @@ export default async function RecurringTransactionsPage() {
           </p>
         </div>
         {templates.length > 0 && (
-          <RecurringTransactionFormDialog
-            accounts={dialogAccounts}
-            categories={dialogCategories}
-            trigger={<Button />}
-            triggerLabel={
-              <>
-                <Plus /> New recurring transaction
-              </>
-            }
-          />
+          <div className="shrink-0">
+            <RecurringTransactionFormDialog
+              accounts={dialogAccounts}
+              categories={dialogCategories}
+              trigger={<Button />}
+              triggerLabel={
+                <>
+                  <Plus /> New recurring transaction
+                </>
+              }
+            />
+          </div>
         )}
       </div>
       <RecurringTransactionList templates={cards} accounts={dialogAccounts} categories={dialogCategories} currency={currency} />

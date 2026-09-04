@@ -95,22 +95,24 @@ export default async function TransactionsPage({
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-xl font-semibold tracking-tight">Transactions</h1>
           <p className="text-sm text-muted-foreground">Every income, expense, and transfer you&apos;ve recorded.</p>
         </div>
         {accounts.length > 0 && (
-          <RecordTransactionDialog
-            accounts={accounts}
-            categories={categories}
-            trigger={<Button />}
-            triggerLabel={
-              <>
-                <Plus /> Record transaction
-              </>
-            }
-          />
+          <div className="shrink-0">
+            <RecordTransactionDialog
+              accounts={accounts}
+              categories={categories}
+              trigger={<Button />}
+              triggerLabel={
+                <>
+                  <Plus /> Record transaction
+                </>
+              }
+            />
+          </div>
         )}
       </div>
       {accounts.length === 0 ? (

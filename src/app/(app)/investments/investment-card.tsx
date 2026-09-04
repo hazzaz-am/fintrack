@@ -114,7 +114,7 @@ export function InvestmentCard({
         </div>
       </CardContent>
       {!closed && (
-        <CardFooter className="flex items-center gap-2">
+        <CardFooter className="flex flex-wrap items-center gap-2">
           {investment.status === "PLANNED" && (
             <ContributeDialog
               investmentId={investment.id}

@@ -51,23 +51,25 @@ export default async function IncomePage({
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-xl font-semibold tracking-tight">Income</h1>
           <p className="text-sm text-muted-foreground">Where your money comes from.</p>
         </div>
         {accounts.length > 0 && (
-          <RecordTransactionDialog
-            accounts={accounts}
-            categories={categories}
-            defaultType="INCOME"
-            trigger={<Button />}
-            triggerLabel={
-              <>
-                <Plus /> Record income
-              </>
-            }
-          />
+          <div className="shrink-0">
+            <RecordTransactionDialog
+              accounts={accounts}
+              categories={categories}
+              defaultType="INCOME"
+              trigger={<Button />}
+              triggerLabel={
+                <>
+                  <Plus /> Record income
+                </>
+              }
+            />
+          </div>
         )}
       </div>
 

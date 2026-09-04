@@ -62,11 +62,13 @@ export default async function ReportsPage({
       </div>
 
       <Tabs defaultValue="summary">
-        <TabsList>
-          <TabsTrigger value="summary">Monthly summary</TabsTrigger>
-          <TabsTrigger value="accounts">Account balances</TabsTrigger>
-          <TabsTrigger value="investments">Investments</TabsTrigger>
-        </TabsList>
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <TabsList>
+            <TabsTrigger value="summary">Monthly summary</TabsTrigger>
+            <TabsTrigger value="accounts">Account balances</TabsTrigger>
+            <TabsTrigger value="investments">Investments</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="summary" className="mt-4 flex flex-col gap-4">
           <PeriodSelectForm period={period} from={fromParam} to={toParam} />

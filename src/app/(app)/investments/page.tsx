@@ -42,7 +42,7 @@ export default async function InvestmentsPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-xl font-semibold tracking-tight">Investments</h1>
           <p className="text-sm text-muted-foreground">
@@ -50,15 +50,17 @@ export default async function InvestmentsPage() {
           </p>
         </div>
         {investments.length > 0 && (
-          <InvestmentFormDialog
-            accounts={dialogAccounts}
-            trigger={<Button />}
-            triggerLabel={
-              <>
-                <Plus /> Add investment
-              </>
-            }
-          />
+          <div className="shrink-0">
+            <InvestmentFormDialog
+              accounts={dialogAccounts}
+              trigger={<Button />}
+              triggerLabel={
+                <>
+                  <Plus /> Add investment
+                </>
+              }
+            />
+          </div>
         )}
       </div>
       <InvestmentList investments={cards} accounts={dialogAccounts} currency={currency} />

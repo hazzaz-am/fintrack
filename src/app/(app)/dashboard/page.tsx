@@ -82,22 +82,24 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-xl font-semibold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground">Your complete financial picture, this month.</p>
         </div>
         {accounts.length > 0 && (
-          <RecordTransactionDialog
-            accounts={accounts}
-            categories={categories}
-            trigger={<Button />}
-            triggerLabel={
-              <>
-                <Plus /> Record transaction
-              </>
-            }
-          />
+          <div className="shrink-0">
+            <RecordTransactionDialog
+              accounts={accounts}
+              categories={categories}
+              trigger={<Button />}
+              triggerLabel={
+                <>
+                  <Plus /> Record transaction
+                </>
+              }
+            />
+          </div>
         )}
       </div>
 

@@ -35,8 +35,8 @@ export function TransactionFilters({
     // pagination and re-visiting a link never lose the current filters
     // (transactions-ui spec: pagination without state reset).
     <form method="GET" className="rounded-lg border p-4">
-      <FieldGroup className="grid grid-cols-2 gap-x-4 gap-y-3 md:grid-cols-4">
-        <Field className="col-span-2">
+      <FieldGroup className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Field className="sm:col-span-2">
           <FieldLabel htmlFor="search">Search</FieldLabel>
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
