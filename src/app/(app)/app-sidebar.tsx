@@ -28,9 +28,15 @@ export function AppSidebar({ user }: { user: PublicUser }) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link href="/dashboard" />}>
+            <SidebarMenuButton
+              size="lg"
+              render={<Link href="/dashboard" />}
+              className="group-data-[collapsible=icon]:p-2!"
+            >
               <Wallet />
-              <span className="font-heading font-semibold">FinTrack</span>
+              <span className="font-heading font-semibold group-data-[collapsible=icon]:hidden">
+                FinTrack
+              </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
