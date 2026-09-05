@@ -19,6 +19,8 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { contributeAction } from "./actions";
 import { contributeInvestmentSchema } from "@/lib/validation/investment";
 import { useAppForm, handleFieldBlur } from "@/lib/forms/use-app-form";
+import { useReservationGate } from "@/lib/forms/use-reservation-gate";
+import { ReservationConsentWizard } from "@/components/goal-reservation/reservation-consent-wizard";
 import { AppFieldError } from "@/lib/forms/app-field-error";
 import type { DialogAccount } from "./investment-form-dialog";
 
@@ -87,14 +89,22 @@ function ContributeForm({
     transactionDate: today(),
     description: undefined,
   };
+  const { gatedAction, reservation, wizardError, isPending, cancel, confirm } = useReservationGate(
+    contributeAction.bind(null, investmentId)
+  );
   const form = useAppForm({
     defaultValues,
     schema: contributeInvestmentSchema as unknown as z.ZodType<unknown, ContributeValues>,
-    action: contributeAction.bind(null, investmentId),
-    onSuccess,
+    action: gatedAction,
+    onSuccess: (state) => {
+      if (state.success) onSuccess();
+    },
   });
+  const selectedAccountId = form.state.values.accountId;
+  const currency = accounts.find((a) => a.id === selectedAccountId)?.currency ?? accounts[0]?.currency ?? "BDT";
 
   return (
+    <>
     <form
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
       onSubmit={(e) => {
@@ -198,5 +208,18 @@ function ContributeForm({
         </form.Subscribe>
       </DrawerFooter>
     </form>
+    {reservation && (
+      <ReservationConsentWizard
+        open
+        shortfall={reservation.shortfall}
+        currency={currency}
+        goals={reservation.goals}
+        pending={isPending}
+        error={wizardError}
+        onCancel={cancel}
+        onConfirm={(consent) => confirm(consent, onSuccess)}
+      />
+    )}
+    </>
   );
 }

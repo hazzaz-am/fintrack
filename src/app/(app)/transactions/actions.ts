@@ -8,12 +8,27 @@ import {
   recordTransferSchema,
   updateTransactionSchema,
 } from "@/lib/validation/transaction";
+import { reservationConsentSchema, type ReservationConsentInput } from "@/lib/validation/goal-reservation";
+import type { ReservationShortfall } from "@/lib/services/goal-reservation-service";
 import { AppError } from "@/lib/errors";
 
 export interface TransactionActionState {
   error?: string;
   fieldErrors?: Record<string, string[]>;
   success?: boolean;
+  /** Set instead of `error` when this transaction dips into a goal's reserve and needs the consent wizard (goal-reservation-guard spec). */
+  reservationRequired?: ReservationShortfall;
+}
+
+/** Parses the wizard's Step 2 payload, sent as a JSON string under `reservationConsent` — absent for every ordinary submission. */
+function parseReservationConsent(formData: FormData): ReservationConsentInput | undefined {
+  const raw = formData.get("reservationConsent");
+  if (typeof raw !== "string" || raw.trim() === "") return undefined;
+  const parsed = reservationConsentSchema.safeParse(JSON.parse(raw));
+  if (!parsed.success) {
+    throw new AppError("VALIDATION_ERROR", "Invalid reservation consent payload.");
+  }
+  return parsed.data;
 }
 
 function orUndefined(value: FormDataEntryValue | null): string | undefined {
@@ -54,6 +69,7 @@ export async function recordTransactionAction(
   try {
     const userId = await requireAuth();
     const kind = formData.get("kind");
+    const consent = parseReservationConsent(formData);
 
     if (kind === "TRANSFER") {
       const parsed = recordTransferSchema.safeParse({
@@ -67,7 +83,7 @@ export async function recordTransactionAction(
       if (!parsed.success) {
         return { fieldErrors: parsed.error.flatten().fieldErrors };
       }
-      await TransactionService.recordTransfer(userId, parsed.data);
+      await TransactionService.recordTransfer(userId, parsed.data, consent);
     } else if (kind === "INCOME" || kind === "EXPENSE") {
       const parsed = recordIncomeOrExpenseSchema.safeParse({
         accountId: formData.get("accountId"),
@@ -83,7 +99,7 @@ export async function recordTransactionAction(
       if (kind === "INCOME") {
         await TransactionService.recordIncome(userId, parsed.data);
       } else {
-        await TransactionService.recordExpense(userId, parsed.data);
+        await TransactionService.recordExpense(userId, parsed.data, consent);
       }
     } else {
       return { error: "Choose a transaction type." };
@@ -92,7 +108,12 @@ export async function recordTransactionAction(
     revalidateAllTransactionPaths();
     return { success: true };
   } catch (error) {
-    if (error instanceof AppError) return { error: error.message };
+    if (error instanceof AppError) {
+      if (error.code === "RESERVATION_CONSENT_REQUIRED") {
+        return { reservationRequired: error.details as ReservationShortfall };
+      }
+      return { error: error.message };
+    }
     throw error;
   }
 }

@@ -32,6 +32,13 @@ enum SavingsGoalStatus {
   ARCHIVED
 }
 
+enum GoalReservationPromiseStatus {
+  OPEN
+  PARTIALLY_RESOLVED
+  RESOLVED
+  WRITTEN_OFF
+}
+
 enum InvestmentStatus {
   PLANNED
   ACTIVE
@@ -66,12 +73,13 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  accounts              Account[]
-  categories            Category[]
-  transactions          Transaction[]
-  savingsGoals          SavingsGoal[]
-  investments           Investment[]
-  recurringTransactions RecurringTransaction[]
+  accounts                Account[]
+  categories              Category[]
+  transactions            Transaction[]
+  savingsGoals            SavingsGoal[]
+  investments             Investment[]
+  recurringTransactions   RecurringTransaction[]
+  goalReservationPromises GoalReservationPromise[]
 
   @@map("users")
 }
@@ -89,11 +97,12 @@ model Account {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactionsAsAccount Transaction[]          @relation("TransactionAccount")
-  transactionsAsSource  Transaction[]          @relation("TransactionSourceAccount")
-  transactionsAsDest    Transaction[]          @relation("TransactionDestinationAccount")
+  user                  User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactionsAsAccount Transaction[]            @relation("TransactionAccount")
+  transactionsAsSource  Transaction[]            @relation("TransactionSourceAccount")
+  transactionsAsDest    Transaction[]            @relation("TransactionDestinationAccount")
   goalAllocationEvents  GoalAllocationEvent[]
+  reservationPromises   GoalReservationPromise[]
   recurringTransactions RecurringTransaction[]
 
   @@index([userId])
@@ -151,6 +160,7 @@ model Transaction {
   destinationAccount   Account?              @relation("TransactionDestinationAccount", fields: [destinationAccountId], references: [id], onDelete: Cascade)
   investment           Investment?           @relation(fields: [investmentId], references: [id], onDelete: Cascade)
   recurringTransaction RecurringTransaction? @relation(fields: [recurringTransactionId], references: [id], onDelete: SetNull)
+  reservationEvents    GoalAllocationEvent[] @relation("TransactionReservationEvents")
 
   @@index([userId])
   @@index([accountId])
@@ -173,27 +183,73 @@ model SavingsGoal {
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
-  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  allocationEvents GoalAllocationEvent[]
+  user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  allocationEvents    GoalAllocationEvent[]
+  reservationPromises GoalReservationPromise[]
 
   @@index([userId])
   @@map("savings_goals")
 }
 
+// `sourceTransactionId` traces an event created by the reserved-funds guard
+// (goal-reservation-guard capability) back to the outflow transaction that
+// caused it — null for events from the ordinary allocate/moveAllocation
+// flows. `promiseId` links both the original negative event and any later
+// positive return events to the GoalReservationPromise they belong to; also
+// null for ordinary allocate/moveAllocation events. Both stay SetNull on
+// delete of their target so this remains an append-only ledger — deleting
+// the source transaction never deletes history, it only orphans the link
+// (the reversing event is what actually undoes the effect).
 model GoalAllocationEvent {
-  id            String   @id @default(cuid())
-  savingsGoalId String
-  accountId     String
-  amount        Decimal  @db.Decimal(14, 2)
-  note          String?
-  createdAt     DateTime @default(now())
+  id                  String   @id @default(cuid())
+  savingsGoalId       String
+  accountId           String
+  amount              Decimal  @db.Decimal(14, 2)
+  note                String?
+  sourceTransactionId String?
+  promiseId           String?
+  createdAt           DateTime @default(now())
 
-  savingsGoal SavingsGoal @relation(fields: [savingsGoalId], references: [id], onDelete: Cascade)
-  account     Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  savingsGoal       SavingsGoal             @relation(fields: [savingsGoalId], references: [id], onDelete: Cascade)
+  account           Account                 @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sourceTransaction Transaction?            @relation("TransactionReservationEvents", fields: [sourceTransactionId], references: [id], onDelete: SetNull)
+  promise           GoalReservationPromise? @relation(fields: [promiseId], references: [id], onDelete: SetNull)
 
   @@index([savingsGoalId])
   @@index([accountId])
+  @@index([sourceTransactionId])
+  @@index([promiseId])
   @@map("goal_allocation_events")
+}
+
+// Tracks a "return by date" commitment made when the reserved-funds guard
+// (goal-reservation-guard capability) let a user consent to dipping into a
+// goal's reserve. `remainingAmount` starts at `amount` and is paid down by
+// partial/full returns (each a positive GoalAllocationEvent linked via
+// promiseId); `status` is the only stored state — OVERDUE is deliberately
+// not a stored value, it's derived at read time from `dueDate` vs. now,
+// mirroring SavingsGoal's derived achieved-state convention.
+model GoalReservationPromise {
+  id              String                       @id @default(cuid())
+  userId          String
+  savingsGoalId   String
+  accountId       String
+  amount          Decimal                      @db.Decimal(14, 2)
+  remainingAmount Decimal                      @db.Decimal(14, 2)
+  dueDate         DateTime
+  status          GoalReservationPromiseStatus @default(OPEN)
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savingsGoal      SavingsGoal           @relation(fields: [savingsGoalId], references: [id], onDelete: Cascade)
+  account          Account               @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  allocationEvents GoalAllocationEvent[]
+
+  @@index([userId])
+  @@index([savingsGoalId])
+  @@index([accountId])
+  @@map("goal_reservation_promises")
 }
 
 // No accountId and no stored principal column (design.md D9, D7): funding

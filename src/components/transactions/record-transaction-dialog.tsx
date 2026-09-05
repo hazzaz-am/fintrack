@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { recordTransactionAction, type TransactionActionState } from "@/app/(app)/transactions/actions";
 import { useAppForm, handleFieldBlur } from "@/lib/forms/use-app-form";
+import { useReservationGate } from "@/lib/forms/use-reservation-gate";
+import { ReservationConsentWizard } from "@/components/goal-reservation/reservation-consent-wizard";
 import { AppFieldError } from "@/lib/forms/app-field-error";
 import type { z } from "zod";
 import { recordIncomeOrExpenseSchema, recordTransferSchema } from "@/lib/validation/transaction";
@@ -147,16 +149,22 @@ function IncomeOrExpenseForm({
     transactionDate: today(),
     description: "",
   };
+  const { gatedAction, reservation, wizardError, isPending, cancel, confirm } = useReservationGate(recordAction(kind));
   const form = useAppForm({
     defaultValues,
     // Cast: `z.coerce.date()` reports `transactionDate`'s input as `unknown`, not
     // the plain date string this form actually binds.
     schema: recordIncomeOrExpenseSchema as unknown as z.ZodType<unknown, RecordIncomeOrExpenseValues>,
-    action: recordAction(kind),
-    onSuccess,
+    action: gatedAction,
+    onSuccess: (state) => {
+      if (state.success) onSuccess();
+    },
   });
+  const selectedAccountId = form.state.values.accountId;
+  const currency = accounts.find((a) => a.id === selectedAccountId)?.currency ?? accounts[0]?.currency ?? "BDT";
 
   return (
+    <>
     <form
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
       onSubmit={(e) => {
@@ -304,6 +312,19 @@ function IncomeOrExpenseForm({
         </form.Subscribe>
       </DrawerFooter>
     </form>
+    {reservation && (
+      <ReservationConsentWizard
+        open
+        shortfall={reservation.shortfall}
+        currency={currency}
+        goals={reservation.goals}
+        pending={isPending}
+        error={wizardError}
+        onCancel={cancel}
+        onConfirm={(consent) => confirm(consent, onSuccess)}
+      />
+    )}
+    </>
   );
 }
 
@@ -324,15 +345,23 @@ function TransferForm({
     transactionDate: today(),
     description: "",
   };
+  const { gatedAction, reservation, wizardError, isPending, cancel, confirm } = useReservationGate(
+    recordAction("TRANSFER")
+  );
   const form = useAppForm({
     defaultValues,
     // Cast: see the same cast in `IncomeOrExpenseForm` above.
     schema: recordTransferSchema as unknown as z.ZodType<unknown, RecordTransferValues>,
-    action: recordAction("TRANSFER"),
-    onSuccess,
+    action: gatedAction,
+    onSuccess: (state) => {
+      if (state.success) onSuccess();
+    },
   });
+  const selectedSourceAccountId = form.state.values.sourceAccountId;
+  const currency = accounts.find((a) => a.id === selectedSourceAccountId)?.currency ?? accounts[0]?.currency ?? "BDT";
 
   return (
+    <>
     <form
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
       onSubmit={(e) => {
@@ -478,5 +507,18 @@ function TransferForm({
         </form.Subscribe>
       </DrawerFooter>
     </form>
+    {reservation && (
+      <ReservationConsentWizard
+        open
+        shortfall={reservation.shortfall}
+        currency={currency}
+        goals={reservation.goals}
+        pending={isPending}
+        error={wizardError}
+        onCancel={cancel}
+        onConfirm={(consent) => confirm(consent, onSuccess)}
+      />
+    )}
+    </>
   );
 }

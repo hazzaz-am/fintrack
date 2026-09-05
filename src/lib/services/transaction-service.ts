@@ -7,6 +7,8 @@ import {
   type ChronologicalPosition,
 } from "@/lib/services/account-service";
 import { CategoryService } from "@/lib/services/category-service";
+import { computeShortfall, applyReservationConsent, reverseForTransaction } from "@/lib/services/goal-reservation-service";
+import type { ReservationConsentInput } from "@/lib/validation/goal-reservation";
 import type {
   DateRangeFilterInput,
   RecordIncomeOrExpenseInput,
@@ -14,6 +16,38 @@ import type {
   TransactionSearchInput,
   UpdateTransactionInput,
 } from "@/lib/validation/transaction";
+
+/** Whatever `new Decimal(...)` accepts — Prisma's `Decimal.Value` type isn't reachable through the `Prisma` namespace in this version. */
+type MoneyValue = string | number | Prisma.Decimal;
+
+// Shared by recordExpense/recordTransfer (and InvestmentService.contribute):
+// after the underlying transaction passes the insufficient-balance check,
+// see whether it dips into a goal's reserve on `accountId`, and either
+// require consent (goal-reservation-guard spec) or apply an already-given
+// one. Runs strictly after the balance check — "can't afford it at all" is a
+// harder stop than "can afford it but it's reserved" (design.md D2).
+export async function enforceReservationGuard(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  transactionId: string,
+  accountId: string,
+  amount: MoneyValue,
+  vatAmount: MoneyValue | null | undefined,
+  consent: ReservationConsentInput | undefined
+): Promise<void> {
+  const result = await computeShortfall(userId, accountId, amount, vatAmount ?? 0);
+  if (Number(result.shortfall) <= 0) return;
+
+  if (!consent) {
+    throw new AppError(
+      "RESERVATION_CONSENT_REQUIRED",
+      `This dips ${result.shortfall} into money reserved by a savings goal on this account.`,
+      { shortfall: result.shortfall, unallocated: result.unallocated, goals: result.goals }
+    );
+  }
+
+  await applyReservationConsent(tx, userId, transactionId, accountId, result.shortfall, consent);
+}
 
 export interface TransactionListItem {
   id: string;
@@ -48,7 +82,8 @@ async function getOwnedTransactionOrThrow(userId: string, transactionId: string)
 async function recordIncomeOrExpense(
   userId: string,
   type: "INCOME" | "EXPENSE",
-  input: RecordIncomeOrExpenseInput
+  input: RecordIncomeOrExpenseInput,
+  consent?: ReservationConsentInput
 ) {
   await getOwnedAccountOrThrow(userId, input.accountId);
   await CategoryService.getOwnedOfType(userId, input.categoryId, type);
@@ -71,6 +106,7 @@ async function recordIncomeOrExpense(
     // Only EXPENSE can drive the account negative — INCOME only ever raises it.
     if (type === "EXPENSE") {
       await assertChronologicalBalanceNonNegative(tx, userId, input.accountId, created);
+      await enforceReservationGuard(tx, userId, created.id, input.accountId, input.amount, input.vatAmount, consent);
     }
 
     return created;
@@ -82,11 +118,11 @@ export const TransactionService = {
     return recordIncomeOrExpense(userId, "INCOME", input);
   },
 
-  recordExpense(userId: string, input: RecordIncomeOrExpenseInput) {
-    return recordIncomeOrExpense(userId, "EXPENSE", input);
+  recordExpense(userId: string, input: RecordIncomeOrExpenseInput, consent?: ReservationConsentInput) {
+    return recordIncomeOrExpense(userId, "EXPENSE", input, consent);
   },
 
-  async recordTransfer(userId: string, input: RecordTransferInput) {
+  async recordTransfer(userId: string, input: RecordTransferInput, consent?: ReservationConsentInput) {
     if (input.sourceAccountId === input.destinationAccountId) {
       throw new AppError("INVALID_TRANSFER", "Source and destination accounts must differ.");
     }
@@ -119,6 +155,7 @@ export const TransactionService = {
       // Only the source account can go negative from a new transfer — the
       // destination side only ever gains.
       await assertChronologicalBalanceNonNegative(tx, userId, input.sourceAccountId, created);
+      await enforceReservationGuard(tx, userId, created.id, input.sourceAccountId, input.amount, input.vatAmount, consent);
 
       return created;
     });
@@ -183,6 +220,12 @@ export const TransactionService = {
     const existing = await getOwnedTransactionOrThrow(userId, transactionId);
 
     await prisma.$transaction(async (tx) => {
+      // Undo any reserved-funds dip this transaction caused before the row
+      // itself is gone (goal-reservation-guard spec, "Deleting a Transaction
+      // Reverses Its Reservation Effects") — order doesn't matter for the
+      // query itself (it looks up by transactionId, not a live relation),
+      // but doing it first keeps the "undo, then remove" narrative clear.
+      await reverseForTransaction(tx, transactionId);
       await tx.transaction.delete({ where: { id: transactionId } });
 
       // Removing an outflow (EXPENSE, transfer-out, INVESTMENT_CONTRIBUTION)

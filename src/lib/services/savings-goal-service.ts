@@ -19,8 +19,12 @@ async function getOwnedGoalOrThrow(userId: string, goalId: string) {
   return goal;
 }
 
-async function sumAllocationsForAccount(accountId: string) {
-  const result = await prisma.goalAllocationEvent.aggregate({
+/** Exported for goal-reservation-service, which needs the same "how much of this account is reserved" math inside its own $transaction. */
+export async function sumAllocationsForAccount(
+  accountId: string,
+  client: Prisma.TransactionClient | typeof prisma = prisma
+) {
+  const result = await client.goalAllocationEvent.aggregate({
     where: { accountId },
     _sum: { amount: true },
   });

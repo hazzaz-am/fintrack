@@ -9,12 +9,26 @@ import {
   contributeInvestmentSchema,
   recordMaturityOrWithdrawalSchema,
 } from "@/lib/validation/investment";
+import { reservationConsentSchema, type ReservationConsentInput } from "@/lib/validation/goal-reservation";
+import type { ReservationShortfall } from "@/lib/services/goal-reservation-service";
 import { AppError } from "@/lib/errors";
 
 export interface InvestmentActionState {
   error?: string;
   fieldErrors?: Record<string, string[]>;
   success?: boolean;
+  /** Set instead of `error` when this contribution dips into a goal's reserve and needs the consent wizard (goal-reservation-guard spec). */
+  reservationRequired?: ReservationShortfall;
+}
+
+function parseReservationConsent(formData: FormData): ReservationConsentInput | undefined {
+  const raw = formData.get("reservationConsent");
+  if (typeof raw !== "string" || raw.trim() === "") return undefined;
+  const parsed = reservationConsentSchema.safeParse(JSON.parse(raw));
+  if (!parsed.success) {
+    throw new AppError("VALIDATION_ERROR", "Invalid reservation consent payload.");
+  }
+  return parsed.data;
 }
 
 function orUndefined(value: FormDataEntryValue | null): string | undefined {
@@ -73,11 +87,17 @@ export async function createInvestmentAction(
     if (!parsed.success) {
       return { fieldErrors: parsed.error.flatten().fieldErrors };
     }
-    await InvestmentService.createWithInitialContribution(userId, parsed.data);
+    const consent = parseReservationConsent(formData);
+    await InvestmentService.createWithInitialContribution(userId, parsed.data, consent);
     revalidateInvestmentPaths();
     return { success: true };
   } catch (error) {
-    if (error instanceof AppError) return { error: error.message };
+    if (error instanceof AppError) {
+      if (error.code === "RESERVATION_CONSENT_REQUIRED") {
+        return { reservationRequired: error.details as ReservationShortfall };
+      }
+      return { error: error.message };
+    }
     throw error;
   }
 }
@@ -127,11 +147,17 @@ export async function contributeAction(
     if (!parsed.success) {
       return { fieldErrors: parsed.error.flatten().fieldErrors };
     }
-    await InvestmentService.contribute(userId, parsed.data);
+    const consent = parseReservationConsent(formData);
+    await InvestmentService.contribute(userId, parsed.data, consent);
     revalidateInvestmentPaths();
     return { success: true };
   } catch (error) {
-    if (error instanceof AppError) return { error: error.message };
+    if (error instanceof AppError) {
+      if (error.code === "RESERVATION_CONSENT_REQUIRED") {
+        return { reservationRequired: error.details as ReservationShortfall };
+      }
+      return { error: error.message };
+    }
     throw error;
   }
 }

@@ -2,6 +2,8 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { assertChronologicalBalanceNonNegative, getOwnedAccountOrThrow } from "@/lib/services/account-service";
+import { enforceReservationGuard } from "@/lib/services/transaction-service";
+import type { ReservationConsentInput } from "@/lib/validation/goal-reservation";
 import type {
   ContributeInvestmentInput,
   CreateInvestmentInput,
@@ -113,7 +115,11 @@ export const InvestmentService = {
     });
   },
 
-  async createWithInitialContribution(userId: string, input: CreateInvestmentWithContributionInput) {
+  async createWithInitialContribution(
+    userId: string,
+    input: CreateInvestmentWithContributionInput,
+    consent?: ReservationConsentInput
+  ) {
     if (input.accountId && input.contributionAmount) {
       await getOwnedAccountOrThrow(userId, input.accountId);
     }
@@ -149,6 +155,15 @@ export const InvestmentService = {
           },
         });
         await assertChronologicalBalanceNonNegative(tx, userId, input.accountId, contribution);
+        await enforceReservationGuard(
+          tx,
+          userId,
+          contribution.id,
+          input.accountId,
+          input.contributionAmount,
+          null,
+          consent
+        );
       }
 
       return investment;
@@ -166,7 +181,7 @@ export const InvestmentService = {
   // Multiple contributions to the same investment from different accounts
   // over time are ordinary ledger rows (design.md D7) — no special casing
   // for recurring (DPS-style) contributions.
-  async contribute(userId: string, input: ContributeInvestmentInput) {
+  async contribute(userId: string, input: ContributeInvestmentInput, consent?: ReservationConsentInput) {
     const investment = await getOwnedInvestmentOrThrow(userId, input.investmentId);
     await getOwnedAccountOrThrow(userId, input.accountId);
 
@@ -188,6 +203,7 @@ export const InvestmentService = {
       });
 
       await assertChronologicalBalanceNonNegative(tx, userId, input.accountId, transaction);
+      await enforceReservationGuard(tx, userId, transaction.id, input.accountId, input.amount, null, consent);
 
       if (investment.status === "PLANNED") {
         await tx.investment.update({ where: { id: investment.id }, data: { status: "ACTIVE" } });

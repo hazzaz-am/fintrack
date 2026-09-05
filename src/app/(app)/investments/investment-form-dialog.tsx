@@ -20,6 +20,8 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { createInvestmentAction, updateInvestmentAction, type InvestmentActionState } from "./actions";
 import { createInvestmentWithContributionSchema, updateInvestmentSchema } from "@/lib/validation/investment";
 import { useAppForm, handleFieldBlur } from "@/lib/forms/use-app-form";
+import { useReservationGate } from "@/lib/forms/use-reservation-gate";
+import { ReservationConsentWizard } from "@/components/goal-reservation/reservation-consent-wizard";
 import { AppFieldError } from "@/lib/forms/app-field-error";
 import { INVESTMENT_TYPE_LABELS } from "./investment-type-labels";
 
@@ -128,14 +130,22 @@ function CreateInvestmentForm({ accounts, onSuccess }: { accounts: DialogAccount
     accountId: accounts[0]?.id,
     contributionAmount: undefined,
   };
+  const { gatedAction, reservation, wizardError, isPending, cancel, confirm } = useReservationGate(
+    createAction(fundingMode)
+  );
   const form = useAppForm({
     defaultValues,
     schema: createInvestmentWithContributionSchema as unknown as z.ZodType<unknown, CreateInvestmentValues>,
-    action: createAction(fundingMode),
-    onSuccess,
+    action: gatedAction,
+    onSuccess: (state) => {
+      if (state.success) onSuccess();
+    },
   });
+  const selectedAccountId = form.state.values.accountId;
+  const currency = accounts.find((a) => a.id === selectedAccountId)?.currency ?? accounts[0]?.currency ?? "BDT";
 
   return (
+    <>
     <form
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
       onSubmit={(e) => {
@@ -420,6 +430,19 @@ function CreateInvestmentForm({ accounts, onSuccess }: { accounts: DialogAccount
         </form.Subscribe>
       </DrawerFooter>
     </form>
+    {reservation && (
+      <ReservationConsentWizard
+        open
+        shortfall={reservation.shortfall}
+        currency={currency}
+        goals={reservation.goals}
+        pending={isPending}
+        error={wizardError}
+        onCancel={cancel}
+        onConfirm={(consent) => confirm(consent, onSuccess)}
+      />
+    )}
+    </>
   );
 }
 

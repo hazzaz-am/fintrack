@@ -6,6 +6,7 @@ import { AccountService } from "@/lib/services/account-service";
 import { CategoryService } from "@/lib/services/category-service";
 import { InvestmentService } from "@/lib/services/investment-service";
 import { RecurringTransactionService } from "@/lib/services/recurring-transaction-service";
+import { GoalReservationService } from "@/lib/services/goal-reservation-service";
 import { resolveDateRange, trailingMonthsRange } from "@/lib/date-range";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -15,6 +16,7 @@ import { RecentTransactionsList } from "@/components/transactions/recent-transac
 import { CategoryBreakdownChart } from "@/components/analytics/category-breakdown-chart";
 import { TrendChart } from "@/components/analytics/trend-chart";
 import { DueRecurringWidget } from "@/app/(app)/recurring-transactions/due-recurring-widget";
+import { ReservationBanner } from "./reservation-banner";
 import { formatMoney } from "@/components/transactions/transaction-format";
 import { cn } from "@/lib/utils";
 
@@ -53,18 +55,29 @@ export default async function DashboardPage() {
   const userId = await requireAuth();
   const range = resolveDateRange("month");
 
-  const [accounts, summary, investmentTotals, upcomingMaturities, expenseBreakdown, recent, categories, dueRecurring, trend] =
-    await Promise.all([
-      AccountService.listWithBalances(userId),
-      TransactionService.getSummary(userId, range),
-      InvestmentService.getTotals(userId),
-      InvestmentService.getUpcomingMaturities(userId),
-      AnalyticsService.getCategoryBreakdown(userId, "EXPENSE", range),
-      TransactionService.listPaginated(userId, { pageSize: 8, sortBy: "transactionDate", sortDir: "desc" }),
-      CategoryService.list(userId),
-      RecurringTransactionService.getDueTemplates(userId),
-      AnalyticsService.getMonthlyTrend(userId, trailingMonthsRange(6)),
-    ]);
+  const [
+    accounts,
+    summary,
+    investmentTotals,
+    upcomingMaturities,
+    expenseBreakdown,
+    recent,
+    categories,
+    dueRecurring,
+    trend,
+    openPromises,
+  ] = await Promise.all([
+    AccountService.listWithBalances(userId),
+    TransactionService.getSummary(userId, range),
+    InvestmentService.getTotals(userId),
+    InvestmentService.getUpcomingMaturities(userId),
+    AnalyticsService.getCategoryBreakdown(userId, "EXPENSE", range),
+    TransactionService.listPaginated(userId, { pageSize: 8, sortBy: "transactionDate", sortDir: "desc" }),
+    CategoryService.list(userId),
+    RecurringTransactionService.getDueTemplates(userId),
+    AnalyticsService.getMonthlyTrend(userId, trailingMonthsRange(6)),
+    GoalReservationService.listOpenPromises(userId),
+  ]);
 
   const currency = accounts[0]?.currency ?? "BDT";
   const totalBalance = accounts.reduce((sum, account) => sum + Number(account.balance), 0);
@@ -82,6 +95,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4">
+      <ReservationBanner items={openPromises} currency={currency} />
+
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-xl font-semibold tracking-tight">Dashboard</h1>
