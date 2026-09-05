@@ -89,7 +89,7 @@ export function CategoryFormDialog({ trigger, triggerLabel, category, defaultTyp
             )}
             {state.error && <p role="alert" className="text-sm font-medium text-destructive">{state.error}</p>}
           </FieldGroup>
-          <DialogFooter>
+          <DialogFooter className="mt-5">
             <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
             <SubmitButton
               label={isEdit ? "Save changes" : "Add category"}
