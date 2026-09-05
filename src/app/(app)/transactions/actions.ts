@@ -60,6 +60,7 @@ export async function recordTransactionAction(
         sourceAccountId: formData.get("sourceAccountId"),
         destinationAccountId: formData.get("destinationAccountId"),
         amount: formData.get("amount"),
+        vatAmount: orUndefined(formData.get("vatAmount")),
         transactionDate: formData.get("transactionDate"),
         description: orUndefined(formData.get("description")),
       });
@@ -72,6 +73,7 @@ export async function recordTransactionAction(
         accountId: formData.get("accountId"),
         categoryId: formData.get("categoryId"),
         amount: formData.get("amount"),
+        vatAmount: kind === "EXPENSE" ? orUndefined(formData.get("vatAmount")) : undefined,
         transactionDate: formData.get("transactionDate"),
         description: orUndefined(formData.get("description")),
       });
@@ -105,6 +107,7 @@ export async function updateTransactionAction(
     const parsed = updateTransactionSchema.safeParse({
       categoryId: orUndefined(formData.get("categoryId")),
       amount: formData.get("amount"),
+      vatAmount: formData.has("vatAmount") ? orNull(formData.get("vatAmount")) : undefined,
       transactionDate: formData.get("transactionDate"),
       description: orNull(formData.get("description")),
     });

@@ -71,6 +71,61 @@ describe("AccountService — derived balance", () => {
     expect(await AccountService.getBalance(user.id, account.id)).toBe("-4000.00");
   });
 
+  it("deducts VAT from the account paying an expense, without affecting the expense amount itself", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "1000.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "100.00",
+      vatAmount: "15.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("885.00");
+
+    const summary = await TransactionService.getSummary(user.id, {
+      from: new Date("2026-09-01"),
+      to: new Date("2026-09-30"),
+    });
+    expect(summary.expense).toBe("100.00");
+  });
+
+  it("deducts VAT from only the source account of a transfer, leaving the destination unaffected", async () => {
+    const user = await createTestUser();
+    const source = await createTestAccount(user.id, "1000.00");
+    const destination = await createTestAccount(user.id, "0.00");
+
+    await TransactionService.recordTransfer(user.id, {
+      sourceAccountId: source.id,
+      destinationAccountId: destination.id,
+      amount: "200.00",
+      vatAmount: "10.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+
+    expect(await AccountService.getBalance(user.id, source.id)).toBe("790.00");
+    expect(await AccountService.getBalance(user.id, destination.id)).toBe("200.00");
+  });
+
+  it("ignores a VAT amount sent on an income transaction", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const category = await createTestCategory(user.id, "INCOME", "Salary");
+
+    await TransactionService.recordIncome(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "500.00",
+      vatAmount: "50.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("500.00");
+  });
+
   it("computes balances for every account in one pass via listWithBalances", async () => {
     const user = await createTestUser();
     const a = await createTestAccount(user.id, "100.00");

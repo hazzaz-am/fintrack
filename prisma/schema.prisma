@@ -138,6 +138,7 @@ model Transaction {
   recurringTransactionId String?
   type                   TransactionType
   amount                 Decimal         @db.Decimal(14, 2)
+  vatAmount              Decimal?        @db.Decimal(14, 2)
   description            String?
   transactionDate        DateTime
   createdAt              DateTime        @default(now())

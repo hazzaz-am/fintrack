@@ -106,6 +106,42 @@ describe("TransactionService", () => {
     expect(await AccountService.getBalance(user.id, account.id)).toBe("0.00");
   });
 
+  it("allows editing and clearing a VAT amount on an expense", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "1000.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    const transaction = await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "100.00",
+      vatAmount: "10.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("890.00");
+
+    await TransactionService.update(user.id, transaction.id, { vatAmount: "20.00" });
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("880.00");
+
+    await TransactionService.update(user.id, transaction.id, { vatAmount: null });
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("900.00");
+  });
+
+  it("rejects a VAT amount on an income transaction", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const category = await createTestCategory(user.id, "INCOME", "Salary");
+
+    const transaction = await TransactionService.recordIncome(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "500.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+
+    await expect(TransactionService.update(user.id, transaction.id, { vatAmount: "5.00" })).rejects.toThrow(AppError);
+  });
+
   it("filters transactions by transactionDate, not createdAt", async () => {
     const user = await createTestUser();
     const account = await createTestAccount(user.id, "0.00");

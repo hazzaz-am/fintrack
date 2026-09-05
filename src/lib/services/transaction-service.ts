@@ -15,6 +15,7 @@ export interface TransactionListItem {
   id: string;
   type: string;
   amount: string;
+  vatAmount: string | null;
   description: string | null;
   transactionDate: Date;
   accountId: string | null;
@@ -55,6 +56,8 @@ async function recordIncomeOrExpense(
       categoryId: input.categoryId,
       type,
       amount: input.amount,
+      // VAT only applies to expenses — it's ignored for income even if sent.
+      vatAmount: type === "EXPENSE" ? input.vatAmount : undefined,
       transactionDate: input.transactionDate,
       description: input.description,
     },
@@ -94,6 +97,7 @@ export const TransactionService = {
           sourceAccountId: input.sourceAccountId,
           destinationAccountId: input.destinationAccountId,
           amount: input.amount,
+          vatAmount: input.vatAmount,
           transactionDate: input.transactionDate,
           description: input.description,
         },
@@ -111,11 +115,16 @@ export const TransactionService = {
       await CategoryService.getOwnedOfType(userId, input.categoryId, existing.type as "INCOME" | "EXPENSE");
     }
 
+    if (input.vatAmount !== undefined && existing.type === "INCOME") {
+      throw new AppError("VALIDATION_ERROR", "Income transactions cannot have VAT.");
+    }
+
     return prisma.transaction.update({
       where: { id: transactionId },
       data: {
         categoryId: input.categoryId,
         amount: input.amount,
+        vatAmount: input.vatAmount,
         transactionDate: input.transactionDate,
         description: input.description,
       },
@@ -205,6 +214,7 @@ export const TransactionService = {
       id: row.id,
       type: row.type,
       amount: row.amount.toString(),
+      vatAmount: row.vatAmount?.toString() ?? null,
       description: row.description,
       transactionDate: row.transactionDate,
       accountId: row.accountId,

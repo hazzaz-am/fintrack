@@ -21,9 +21,12 @@ export interface AccountWithBalance {
 // Computes every account's balance in a single aggregation pass:
 //   balance = openingBalance + income - expense + transfers in - transfers out
 //           - investment contributions + investment returns
+//           - VAT on expenses - VAT on transfers out (source account only)
 // (design.md D1, D6). No N+1 query per account. Investment contributions and
 // returns are excluded from income/expense the same way transfers are — see
-// TransactionService/InvestmentService.
+// TransactionService/InvestmentService. VAT is a fixed amount deducted from
+// the paying/source account in addition to `amount`, but is never part of
+// `amount` itself, so it doesn't affect category totals or getSummary.
 async function computeBalances(userId: string, accountIds?: string[]): Promise<Map<string, string>> {
   const rows = await prisma.$queryRaw<Array<{ accountId: string; balance: string }>>`
     SELECT
@@ -32,8 +35,10 @@ async function computeBalances(userId: string, accountIds?: string[]): Promise<M
         a."openingBalance"
         + COALESCE(SUM(CASE WHEN t."type" = 'INCOME' AND t."accountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
         - COALESCE(SUM(CASE WHEN t."type" = 'EXPENSE' AND t."accountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
+        - COALESCE(SUM(CASE WHEN t."type" = 'EXPENSE' AND t."accountId" = a.id THEN t."vatAmount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
         + COALESCE(SUM(CASE WHEN t."type" = 'TRANSFER' AND t."destinationAccountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
         - COALESCE(SUM(CASE WHEN t."type" = 'TRANSFER' AND t."sourceAccountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
+        - COALESCE(SUM(CASE WHEN t."type" = 'TRANSFER' AND t."sourceAccountId" = a.id THEN t."vatAmount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
         - COALESCE(SUM(CASE WHEN t."type" = 'INVESTMENT_CONTRIBUTION' AND t."accountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
         + COALESCE(SUM(CASE WHEN t."type" = 'INVESTMENT_RETURN' AND t."accountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
       )::text AS "balance"

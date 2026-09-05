@@ -13,7 +13,7 @@ import {
   DrawerClose,
 } from "@/components/ui/drawer";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Field, FieldGroup, FieldLabel, FieldError } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel, FieldError, FieldDescription } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -169,6 +169,16 @@ export function RecordTransactionDialog({
                 <Input id="amount" name="amount" inputMode="decimal" required placeholder="0.00" />
                 <FieldError errors={state.fieldErrors?.amount?.map((message) => ({ message }))} />
               </Field>
+              {kind !== "INCOME" && (
+                <Field>
+                  <FieldLabel htmlFor="vatAmount">VAT (optional)</FieldLabel>
+                  <Input id="vatAmount" name="vatAmount" inputMode="decimal" placeholder="0.00" />
+                  <FieldDescription>
+                    Deducted from the {kind === "TRANSFER" ? "from account" : "account"} in addition to the amount above — it isn&apos;t included in the amount itself.
+                  </FieldDescription>
+                  <FieldError errors={state.fieldErrors?.vatAmount?.map((message) => ({ message }))} />
+                </Field>
+              )}
               <Field>
                 <FieldLabel htmlFor="transactionDate">Date</FieldLabel>
                 <Input id="transactionDate" name="transactionDate" type="date" required defaultValue={today()} />

@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { zPositiveMoney } from "./money";
+import { zPositiveMoney, zNonNegativeMoney } from "./money";
 
 export const recordIncomeOrExpenseSchema = z.object({
   accountId: z.string().cuid(),
   categoryId: z.string().cuid(),
   amount: zPositiveMoney,
+  vatAmount: zNonNegativeMoney.optional(),
   transactionDate: z.coerce.date(),
   description: z.string().trim().max(300).optional(),
 });
@@ -14,6 +15,7 @@ export const recordTransferSchema = z
     sourceAccountId: z.string().cuid(),
     destinationAccountId: z.string().cuid(),
     amount: zPositiveMoney,
+    vatAmount: zNonNegativeMoney.optional(),
     transactionDate: z.coerce.date(),
     description: z.string().trim().max(300).optional(),
   })
@@ -25,6 +27,7 @@ export const recordTransferSchema = z
 export const updateTransactionSchema = z.object({
   categoryId: z.string().cuid().optional(),
   amount: zPositiveMoney.optional(),
+  vatAmount: zNonNegativeMoney.nullable().optional(),
   transactionDate: z.coerce.date().optional(),
   description: z.string().trim().max(300).nullable().optional(),
 });

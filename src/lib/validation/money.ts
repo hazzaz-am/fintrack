@@ -29,3 +29,7 @@ export const zMoney = z
     message: "Amount must be a valid decimal with at most 2 decimal places",
   })
   .transform((value) => normalize(value));
+
+export const zNonNegativeMoney = zMoney.refine((value) => Number(value) >= 0, {
+  message: "Amount must not be negative",
+});

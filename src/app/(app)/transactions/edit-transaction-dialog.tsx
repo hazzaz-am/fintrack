@@ -58,6 +58,7 @@ export function EditTransactionDialog({
 
   const isTransfer = transaction.type === "TRANSFER" || transaction.type.startsWith("INVESTMENT_");
   const relevantCategories = categories.filter((category) => category.type === transaction.type);
+  const showVat = transaction.type === "EXPENSE" || transaction.type === "TRANSFER";
 
   return (
     <Drawer open={open} onOpenChange={setOpen}>
@@ -92,6 +93,22 @@ export function EditTransactionDialog({
               <Input id="amount" name="amount" inputMode="decimal" defaultValue={transaction.amount} />
               <FieldError errors={state.fieldErrors?.amount?.map((message) => ({ message }))} />
             </Field>
+            {showVat && (
+              <Field>
+                <FieldLabel htmlFor="vatAmount">VAT (optional)</FieldLabel>
+                <Input
+                  id="vatAmount"
+                  name="vatAmount"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  defaultValue={transaction.vatAmount ?? ""}
+                />
+                <FieldDescription>
+                  Deducted from the {transaction.type === "TRANSFER" ? "from account" : "account"} in addition to the amount above.
+                </FieldDescription>
+                <FieldError errors={state.fieldErrors?.vatAmount?.map((message) => ({ message }))} />
+              </Field>
+            )}
             <Field>
               <FieldLabel htmlFor="transactionDate">Date</FieldLabel>
               <Input
