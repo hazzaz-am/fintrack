@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { AccountService } from "@/lib/services/account-service";
 import { InvestmentService } from "@/lib/services/investment-service";
@@ -274,6 +275,85 @@ describe("AccountService — chronological balance guard", () => {
         accountId: account.id,
         categoryId: expenseCategory.id,
         amount: "5000.00",
+        transactionDate: new Date("2026-09-01"),
+      })
+    ).resolves.not.toThrow();
+  });
+
+  it("does not let an old, already-existing historical dip block a new, otherwise-safe write", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const expenseCategory = await createTestCategory(user.id, "EXPENSE", "Home");
+    const incomeCategory = await createTestCategory(user.id, "INCOME", "Salary");
+
+    // Simulates dirty pre-existing data: an outflow that exceeded the balance
+    // available at the time, inserted directly (bypassing the guard), the way
+    // real rows could exist from before this check was introduced.
+    await prisma.transaction.create({
+      data: {
+        userId: user.id,
+        accountId: account.id,
+        categoryId: expenseCategory.id,
+        type: "EXPENSE",
+        amount: "40000.00",
+        transactionDate: new Date("2026-01-01"),
+      },
+    });
+    // Recovers to a healthy balance afterward.
+    await TransactionService.recordIncome(user.id, {
+      accountId: account.id,
+      categoryId: incomeCategory.id,
+      amount: "54000.00",
+      transactionDate: new Date("2026-01-02"),
+    });
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("14000.00");
+
+    // A brand-new, perfectly affordable expense must succeed even though the
+    // account's full history contains that old, unrelated negative dip.
+    await expect(
+      TransactionService.recordExpense(user.id, {
+        accountId: account.id,
+        categoryId: expenseCategory.id,
+        amount: "10000.00",
+        transactionDate: new Date("2026-09-01"),
+      })
+    ).resolves.not.toThrow();
+  });
+
+  it("does not let a same-day, already-existing historical dip block a new, otherwise-safe write", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const expenseCategory = await createTestCategory(user.id, "EXPENSE", "Home");
+    const incomeCategory = await createTestCategory(user.id, "INCOME", "Salary");
+
+    // Same real-world scenario as the previous test, but the poisoning
+    // outflow and the recovering income are on the SAME calendar day as each
+    // other and as the new write below — transactionDate alone can't tell
+    // them apart, only createdAt/id can (matching how a user who does
+    // several things in one day actually accumulates history).
+    await prisma.transaction.create({
+      data: {
+        userId: user.id,
+        accountId: account.id,
+        categoryId: expenseCategory.id,
+        type: "EXPENSE",
+        amount: "40000.00",
+        transactionDate: new Date("2026-09-01"),
+      },
+    });
+    await TransactionService.recordIncome(user.id, {
+      accountId: account.id,
+      categoryId: incomeCategory.id,
+      amount: "54000.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("14000.00");
+
+    await expect(
+      TransactionService.recordExpense(user.id, {
+        accountId: account.id,
+        categoryId: expenseCategory.id,
+        amount: "10000.00",
         transactionDate: new Date("2026-09-01"),
       })
     ).resolves.not.toThrow();

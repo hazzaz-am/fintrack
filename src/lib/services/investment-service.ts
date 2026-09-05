@@ -37,6 +37,33 @@ async function computePrincipals(userId: string, investmentIds?: string[]): Prom
   return new Map(rows.map((row) => [row.investmentId, row.principal]));
 }
 
+// Which account funded each investment's most recent contribution — used
+// only to default the "To account" selector when recording a maturity or
+// withdrawal (bug: it previously defaulted to the user's first account
+// regardless of which account actually funded the investment). An investment
+// can be contributed to from different accounts over time, so there's no
+// single "the" funding account in general; the most recent one is the most
+// useful default, and the field stays editable either way.
+async function getLastContributionAccountIds(userId: string, investmentIds?: string[]): Promise<Map<string, string>> {
+  const rows = await prisma.transaction.findMany({
+    where: {
+      userId,
+      type: "INVESTMENT_CONTRIBUTION",
+      investmentId: investmentIds && investmentIds.length > 0 ? { in: investmentIds } : { not: null },
+    },
+    orderBy: [{ transactionDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    select: { investmentId: true, accountId: true },
+  });
+
+  const byInvestment = new Map<string, string>();
+  for (const row of rows) {
+    // Ascending order means the last write for a given investmentId is its
+    // most recent contribution.
+    if (row.investmentId && row.accountId) byInvestment.set(row.investmentId, row.accountId);
+  }
+  return byInvestment;
+}
+
 async function getOwnedInvestmentOrThrow(userId: string, investmentId: string) {
   const investment = await prisma.investment.findUnique({ where: { id: investmentId } });
   if (!investment || investment.userId !== userId) {
@@ -111,7 +138,7 @@ export const InvestmentService = {
       });
 
       if (input.accountId && input.contributionAmount) {
-        await tx.transaction.create({
+        const contribution = await tx.transaction.create({
           data: {
             userId,
             accountId: input.accountId,
@@ -121,7 +148,7 @@ export const InvestmentService = {
             transactionDate: input.startDate,
           },
         });
-        await assertChronologicalBalanceNonNegative(tx, userId, input.accountId);
+        await assertChronologicalBalanceNonNegative(tx, userId, input.accountId, contribution);
       }
 
       return investment;
@@ -160,7 +187,7 @@ export const InvestmentService = {
         },
       });
 
-      await assertChronologicalBalanceNonNegative(tx, userId, input.accountId);
+      await assertChronologicalBalanceNonNegative(tx, userId, input.accountId, transaction);
 
       if (investment.status === "PLANNED") {
         await tx.investment.update({ where: { id: investment.id }, data: { status: "ACTIVE" } });
@@ -297,4 +324,7 @@ export const InvestmentService = {
 
   /** Internal helper for other services (e.g. a future dashboard) that need investment principals without an extra round trip. */
   computePrincipalsFor: computePrincipals,
+
+  /** Internal helper for the Investments page: the account of each investment's most recent contribution, to default the maturity/withdrawal "To account" selector sensibly. */
+  getLastContributionAccountIds,
 };

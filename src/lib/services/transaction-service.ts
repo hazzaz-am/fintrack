@@ -1,7 +1,11 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { assertChronologicalBalanceNonNegative, getOwnedAccountOrThrow } from "@/lib/services/account-service";
+import {
+  assertChronologicalBalanceNonNegative,
+  getOwnedAccountOrThrow,
+  type ChronologicalPosition,
+} from "@/lib/services/account-service";
 import { CategoryService } from "@/lib/services/category-service";
 import type {
   DateRangeFilterInput,
@@ -66,7 +70,7 @@ async function recordIncomeOrExpense(
 
     // Only EXPENSE can drive the account negative — INCOME only ever raises it.
     if (type === "EXPENSE") {
-      await assertChronologicalBalanceNonNegative(tx, userId, input.accountId);
+      await assertChronologicalBalanceNonNegative(tx, userId, input.accountId, created);
     }
 
     return created;
@@ -114,7 +118,7 @@ export const TransactionService = {
 
       // Only the source account can go negative from a new transfer — the
       // destination side only ever gains.
-      await assertChronologicalBalanceNonNegative(tx, userId, input.sourceAccountId);
+      await assertChronologicalBalanceNonNegative(tx, userId, input.sourceAccountId, created);
 
       return created;
     });
@@ -151,14 +155,24 @@ export const TransactionService = {
       // edit can move the balance (or its chronological position) in either
       // direction, so every account this transaction touches is always
       // re-checked unconditionally, rather than trying to classify which
-      // edits are risk-free (design.md D3).
+      // edits are risk-free (design.md D3). The anchor is the earlier of the
+      // old/new position (createdAt/id are unchanged by an update, only
+      // transactionDate can move), so both a newly-encroached region (moved
+      // earlier) and a newly-vacated one (moved later) are re-validated.
+      const anchor: ChronologicalPosition =
+        updated.transactionDate < existing.transactionDate
+          ? updated
+          : { transactionDate: existing.transactionDate, createdAt: existing.createdAt, id: existing.id };
+
       if (existing.type === "TRANSFER") {
-        if (existing.sourceAccountId) await assertChronologicalBalanceNonNegative(tx, userId, existing.sourceAccountId);
+        if (existing.sourceAccountId) {
+          await assertChronologicalBalanceNonNegative(tx, userId, existing.sourceAccountId, anchor);
+        }
         if (existing.destinationAccountId) {
-          await assertChronologicalBalanceNonNegative(tx, userId, existing.destinationAccountId);
+          await assertChronologicalBalanceNonNegative(tx, userId, existing.destinationAccountId, anchor);
         }
       } else if (existing.accountId) {
-        await assertChronologicalBalanceNonNegative(tx, userId, existing.accountId);
+        await assertChronologicalBalanceNonNegative(tx, userId, existing.accountId, anchor);
       }
 
       return updated;
@@ -176,9 +190,11 @@ export const TransactionService = {
       // inflow (INCOME, transfer-in, INVESTMENT_RETURN) can uncover a
       // downstream dip if later transactions already relied on that money.
       if (existing.type === "INCOME" || existing.type === "INVESTMENT_RETURN") {
-        if (existing.accountId) await assertChronologicalBalanceNonNegative(tx, userId, existing.accountId);
+        if (existing.accountId) {
+          await assertChronologicalBalanceNonNegative(tx, userId, existing.accountId, existing);
+        }
       } else if (existing.type === "TRANSFER" && existing.destinationAccountId) {
-        await assertChronologicalBalanceNonNegative(tx, userId, existing.destinationAccountId);
+        await assertChronologicalBalanceNonNegative(tx, userId, existing.destinationAccountId, existing);
       }
     });
   },

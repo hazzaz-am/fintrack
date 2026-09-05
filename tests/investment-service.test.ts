@@ -42,6 +42,44 @@ describe("InvestmentService — insufficient-balance guard", () => {
   });
 });
 
+describe("InvestmentService.getLastContributionAccountIds", () => {
+  it("reports the account of an investment's most recent contribution, not its first", async () => {
+    const user = await createTestUser();
+    const bracBank = await createTestAccount(user.id, "10000.00");
+    const ificBank = await createTestAccount(user.id, "10000.00");
+    const investment = await createTestInvestment(user.id, "0.00");
+
+    await InvestmentService.contribute(user.id, {
+      investmentId: investment.id,
+      accountId: bracBank.id,
+      amount: "1000.00",
+      transactionDate: new Date("2026-01-01"),
+    });
+    await InvestmentService.contribute(user.id, {
+      investmentId: investment.id,
+      accountId: ificBank.id,
+      amount: "1000.00",
+      transactionDate: new Date("2026-02-01"),
+    });
+
+    const byInvestment = await InvestmentService.getLastContributionAccountIds(user.id, [investment.id]);
+    expect(byInvestment.get(investment.id)).toBe(ificBank.id);
+  });
+
+  it("omits an investment with no contribution history", async () => {
+    const user = await createTestUser();
+    const investment = await InvestmentService.create(user.id, {
+      name: "Family Land",
+      type: "REAL_ESTATE",
+      openingPrincipal: "500000.00",
+      startDate: new Date("2020-01-01"),
+    });
+
+    const byInvestment = await InvestmentService.getLastContributionAccountIds(user.id, [investment.id]);
+    expect(byInvestment.has(investment.id)).toBe(false);
+  });
+});
+
 describe("InvestmentService", () => {
   it("derives principal from openingPrincipal alone when there is no ledger history", async () => {
     const user = await createTestUser();

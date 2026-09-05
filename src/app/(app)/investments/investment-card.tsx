@@ -23,6 +23,7 @@ export interface InvestmentCardData {
   status: string;
   principal: string;
   daysUntilMaturity?: number;
+  lastContributionAccountId?: string;
 }
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
@@ -149,6 +150,7 @@ export function InvestmentCard({
               availablePrincipal={investment.principal}
               currency={currency}
               maturityDate={investment.maturityDate}
+              defaultAccountId={investment.lastContributionAccountId}
               trigger={<Button variant="outline" size="sm" />}
               triggerLabel={
                 <>

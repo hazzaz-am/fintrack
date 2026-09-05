@@ -5,16 +5,34 @@ import type { CreateAccountInput, UpdateAccountInput } from "@/lib/validation/ac
 
 const { Decimal } = Prisma;
 
-interface ChronologicalRow {
+export interface ChronologicalPosition {
+  transactionDate: Date;
+  createdAt: Date;
   id: string;
+}
+
+interface ChronologicalRow extends ChronologicalPosition {
   type: string;
   amount: Prisma.Decimal;
   vatAmount: Prisma.Decimal | null;
-  transactionDate: Date;
-  createdAt: Date;
   accountId: string | null;
   sourceAccountId: string | null;
   destinationAccountId: string | null;
+}
+
+// Same tiebreak as the query's ORDER BY: transactionDate, then createdAt,
+// then id. Two transactions can share a transactionDate (most users record
+// several things on one day), so comparing dates alone can't tell which of
+// two same-day rows counts as "before" the other — only this full position
+// can.
+function isBefore(a: ChronologicalPosition, b: ChronologicalPosition): boolean {
+  if (a.transactionDate.getTime() !== b.transactionDate.getTime()) {
+    return a.transactionDate.getTime() < b.transactionDate.getTime();
+  }
+  if (a.createdAt.getTime() !== b.createdAt.getTime()) {
+    return a.createdAt.getTime() < b.createdAt.getTime();
+  }
+  return a.id < b.id;
 }
 
 // Signed effect of one transaction row on a specific account's balance,
@@ -43,17 +61,33 @@ function effectOn(accountId: string, row: ChronologicalRow): Prisma.Decimal {
 
 // Replays openingBalance forward through every transaction affecting this
 // account, ordered chronologically (transactionDate, then createdAt, then id
-// as a deterministic same-day tiebreak), and rejects if the running balance
-// would go negative at ANY point in that sequence — not merely at the end
-// (design.md D1: a final-total check alone can be fooled by a backdated
-// insert or a future-dated inflow). Must be called after the write it's
-// guarding, inside the same `tx` — throwing here rolls back that whole
-// transaction, so create/update/delete all reuse this one check uniformly
-// against whatever the DB now actually contains.
+// as a deterministic same-day tiebreak). Rejects if the running balance would
+// go negative at any point AT OR AFTER `anchor`'s position — not merely at
+// the end (design.md D1: a final-total check alone can be fooled by a
+// backdated insert or a future-dated inflow). Anything strictly before
+// `anchor` is only summed, never re-validated: this write did not create
+// that portion of history, and this app deliberately does not audit/backfill
+// pre-existing data (design.md D6), so an old, unrelated dip must not
+// permanently block every future write on the account — only a violation
+// this write's own position could actually cause is rejected.
+//
+// `anchor` must be a full position, not just a date — two transactions often
+// share a transactionDate (most users record several things on one day), and
+// comparing dates alone would fail to exclude an earlier same-day row from
+// re-validation (see `isBefore`). It's the earliest position this write
+// could affect: the new row's own position for a create, the deleted row's
+// pre-delete position for a delete, or the earlier of the old/new position
+// for an edit that moves a transaction's date.
+//
+// Must be called after the write it's guarding, inside the same `tx` —
+// throwing here rolls back that whole transaction, so create/update/delete
+// all reuse this one check uniformly against whatever the DB now actually
+// contains.
 export async function assertChronologicalBalanceNonNegative(
   tx: Prisma.TransactionClient,
   userId: string,
-  accountId: string
+  accountId: string,
+  anchor: ChronologicalPosition
 ): Promise<void> {
   const account = await tx.account.findUnique({ where: { id: accountId } });
   if (!account || account.userId !== userId) {
@@ -82,6 +116,7 @@ export async function assertChronologicalBalanceNonNegative(
   let running = new Decimal(account.openingBalance);
   for (const row of rows) {
     running = running.plus(effectOn(accountId, row));
+    if (isBefore(row, anchor)) continue;
     if (running.isNegative()) {
       throw new AppError(
         "INSUFFICIENT_BALANCE",

@@ -42,6 +42,8 @@ interface RecordMaturityDialogProps {
   availablePrincipal: string;
   currency: string;
   maturityDate: Date | string | null;
+  /** The account of this investment's most recent contribution, if any — defaults "To account" to where the money actually came from instead of an arbitrary first account. */
+  defaultAccountId?: string;
 }
 
 function today(): string {
@@ -66,6 +68,7 @@ export function RecordMaturityDialog({
   availablePrincipal,
   currency,
   maturityDate,
+  defaultAccountId,
 }: RecordMaturityDialogProps) {
   const [open, setOpen] = useState(false);
 
@@ -85,6 +88,7 @@ export function RecordMaturityDialog({
           availablePrincipal={availablePrincipal}
           currency={currency}
           maturityDate={maturityDate}
+          defaultAccountId={defaultAccountId}
           onSuccess={() => setOpen(false)}
         />
       </DrawerContent>
@@ -98,6 +102,7 @@ function RecordMaturityForm({
   availablePrincipal,
   currency,
   maturityDate,
+  defaultAccountId,
   onSuccess,
 }: {
   investmentId: string;
@@ -105,13 +110,22 @@ function RecordMaturityForm({
   availablePrincipal: string;
   currency: string;
   maturityDate: Date | string | null;
+  defaultAccountId?: string;
   onSuccess: () => void;
 }) {
   const [outcome, setOutcome] = useState<Outcome>(defaultOutcome(maturityDate));
 
+  // Prefer the account that actually funded this investment; fall back to the
+  // first account only if there's no contribution history (e.g. an
+  // openingPrincipal-only investment) or that account is no longer active.
+  const fundingAccountId =
+    defaultAccountId && accounts.some((account) => account.id === defaultAccountId)
+      ? defaultAccountId
+      : (accounts[0]?.id ?? "");
+
   const defaultValues: RecordMaturityValues = {
     investmentId,
-    accountId: accounts[0]?.id ?? "",
+    accountId: fundingAccountId,
     principalAmount: availablePrincipal,
     profitAmount: undefined,
     transactionDate: today(),

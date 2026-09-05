@@ -16,6 +16,10 @@ export default async function InvestmentsPage() {
     InvestmentService.getUpcomingMaturities(userId),
     AccountService.listWithBalances(userId),
   ]);
+  const lastContributionAccountById = await InvestmentService.getLastContributionAccountIds(
+    userId,
+    investments.map((investment) => investment.id)
+  );
 
   const daysUntilMaturityById = new Map(upcoming.map((investment) => [investment.id, investment.daysUntilMaturity]));
   const currency = accounts[0]?.currency ?? "BDT";
@@ -38,6 +42,7 @@ export default async function InvestmentsPage() {
     status: investment.status,
     principal: investment.principal,
     daysUntilMaturity: daysUntilMaturityById.get(investment.id),
+    lastContributionAccountId: lastContributionAccountById.get(investment.id),
   }));
 
   return (
