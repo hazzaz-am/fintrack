@@ -7,7 +7,7 @@ TBD - created by archiving change transactions-and-analytics-ui. Update Purpose 
 ## Requirements
 
 ### Requirement: Transactions list shows the user's transaction ledger
-The Transactions screen SHALL display the current user's transactions (income, expense, transfer, investment contribution, investment return) as a table with date, account, description, category, type, and amount, sourced from `TransactionService.list`.
+The Transactions screen SHALL display the current user's transactions (income, expense, transfer, investment contribution, investment return) as a table with date, account, description, category, type, and amount, sourced from `TransactionService.list`. When a transaction has a non-null `vatAmount`, the amount display SHALL also show the VAT amount and a totaled figure equal to `amount + vatAmount`, matching the actual impact on the account's balance. When `vatAmount` is null, the amount displays exactly as it does today with no additional lines.
 
 #### Scenario: User with existing transactions
 - **WHEN** an authenticated user with one or more transactions visits `/transactions`
@@ -16,6 +16,14 @@ The Transactions screen SHALL display the current user's transactions (income, e
 #### Scenario: User with no transactions
 - **WHEN** an authenticated user with zero transactions visits `/transactions`
 - **THEN** an empty state is shown prompting them to record their first transaction, instead of an empty table
+
+#### Scenario: Transaction with VAT shows the VAT amount and total
+- **WHEN** a listed expense transaction has an `amount` of ৳100 and a `vatAmount` of ৳15
+- **THEN** the row shows ৳100 as the amount, ৳15 as VAT, and ৳115 as the totaled figure
+
+#### Scenario: Transaction without VAT is unaffected
+- **WHEN** a listed transaction has no `vatAmount` recorded
+- **THEN** the row shows only its `amount`, with no VAT line or additional total, exactly as before this change
 
 ### Requirement: Transactions list supports search, filter, sort, and pagination
 The Transactions screen SHALL let the user search by description, filter by account, category, transaction type, and date range (via the shared date-range resolver), sort by date or amount, and page through results.
@@ -37,7 +45,7 @@ The Transactions screen SHALL let the user search by description, filter by acco
 - **THEN** the user can navigate to subsequent pages without the filter/search state resetting
 
 ### Requirement: User can record an income transaction
-The Transactions screen SHALL provide a form to record an income transaction (account, category, amount, date, optional description) via a Server Action calling `TransactionService`.
+The Transactions screen SHALL provide a form to record an income transaction (account, category, amount, date, optional description) via a Server Action calling `TransactionService`. The form SHALL validate fields client-side before submission, using the same schema the Server Action validates with.
 
 #### Scenario: Valid income recorded
 - **WHEN** the user submits the record-income form with a valid account, income category, amount, and date
@@ -47,15 +55,27 @@ The Transactions screen SHALL provide a form to record an income transaction (ac
 - **WHEN** the user submits the record-income form with input that fails existing validation
 - **THEN** field-level errors are shown and no transaction is created
 
+#### Scenario: Field-level errors appear before submit
+- **WHEN** the user blurs an invalid field on the record-income form (e.g. an empty account or non-numeric amount)
+- **THEN** that field's error is shown immediately, without submitting the form
+
 ### Requirement: User can record an expense transaction
-The Transactions screen SHALL provide a form to record an expense transaction (account, category, amount, date, optional description) via a Server Action calling `TransactionService`.
+The Transactions screen SHALL provide a form to record an expense transaction (account, category, amount, date, optional description) via a Server Action calling `TransactionService`. The form SHALL validate fields client-side before submission, using the same schema the Server Action validates with.
 
 #### Scenario: Valid expense recorded
 - **WHEN** the user submits the record-expense form with a valid account, expense category, amount, and date
 - **THEN** the transaction is created and appears at the top of the list, and the account's displayed balance reflects the decrease
 
+#### Scenario: Invalid expense rejected
+- **WHEN** the user submits the record-expense form with input that fails existing validation
+- **THEN** field-level errors are shown and no transaction is created
+
+#### Scenario: Field-level errors appear before submit
+- **WHEN** the user blurs an invalid field on the record-expense form (e.g. an empty category or non-numeric amount)
+- **THEN** that field's error is shown immediately, without submitting the form
+
 ### Requirement: User can record a transfer between their own accounts
-The Transactions screen SHALL provide a form to transfer money between two of the user's own accounts, via a Server Action calling `TransactionService.recordTransfer`.
+The Transactions screen SHALL provide a form to transfer money between two of the user's own accounts, via a Server Action calling `TransactionService.recordTransfer`. The form SHALL validate fields client-side before submission, using the same schema-based validation as every other migrated form, including the same-account check.
 
 #### Scenario: Valid transfer recorded
 - **WHEN** the user submits the transfer form with a source account, destination account, and amount
@@ -66,11 +86,19 @@ The Transactions screen SHALL provide a form to transfer money between two of th
 - **THEN** the form shows a validation error and does not submit
 
 ### Requirement: User can edit a transaction
-The Transactions screen SHALL allow editing an existing transaction's editable fields (amount, category, date, description) via a Server Action calling `TransactionService.update`. Reassigning a transaction to a different account is not supported — `TransactionService.update` does not support it, so a transaction recorded against the wrong account must be deleted and re-recorded.
+The Transactions screen SHALL allow editing an existing transaction's editable fields (amount, category, date, description) via a Server Action calling `TransactionService.update`. Reassigning a transaction to a different account is not supported — `TransactionService.update` does not support it, so a transaction recorded against the wrong account must be deleted and re-recorded. The edit form SHALL validate fields client-side before submission, using the same schema as recording a transaction of that type.
 
 #### Scenario: Valid edit
 - **WHEN** the user edits a transaction's amount and submits
 - **THEN** the list reflects the new amount and any account balance shown elsewhere on the page updates on next read
+
+#### Scenario: Invalid edit
+- **WHEN** the user edits a transaction's field to a value that fails validation and submits
+- **THEN** a field-level error is shown and the transaction is not updated
+
+#### Scenario: Field-level errors appear before submit
+- **WHEN** the user blurs an invalid field on the edit form (e.g. a non-numeric amount)
+- **THEN** that field's error is shown immediately, without submitting the form
 
 ### Requirement: User can delete a transaction
 The Transactions screen SHALL allow deleting a transaction, after explicit confirmation, via a Server Action calling `TransactionService.delete`.

@@ -38,6 +38,7 @@ describe("TransactionService", () => {
 
     expect(summary.income).toBe("0.00");
     expect(summary.expense).toBe("0.00");
+    expect(summary.expenseVat).toBe("0.00");
     expect(summary.netCashFlow).toBe("0.00");
   });
 
@@ -74,7 +75,39 @@ describe("TransactionService", () => {
 
     expect(summary.income).toBe("85000.00");
     expect(summary.expense).toBe("61500.00");
+    expect(summary.expenseVat).toBe("0.00");
     expect(summary.netCashFlow).toBe("23500.00");
+  });
+
+  it("includes VAT in the expense total and net cash flow", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const incomeCategory = await createTestCategory(user.id, "INCOME", "Salary");
+    const expenseCategory = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    await TransactionService.recordIncome(user.id, {
+      accountId: account.id,
+      categoryId: incomeCategory.id,
+      amount: "1000.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+    await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: expenseCategory.id,
+      amount: "100.00",
+      vatAmount: "15.00",
+      transactionDate: new Date("2026-09-05"),
+    });
+
+    const summary = await TransactionService.getSummary(user.id, {
+      from: new Date("2026-09-01"),
+      to: new Date("2026-09-30"),
+    });
+
+    expect(summary.expense).toBe("115.00");
+    expect(summary.expenseVat).toBe("15.00");
+    expect(summary.netCashFlow).toBe("885.00");
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("885.00");
   });
 
   it("reflects an edit or delete in both balance and summary immediately", async () => {

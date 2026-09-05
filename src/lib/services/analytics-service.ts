@@ -1,5 +1,4 @@
 import { format } from "date-fns";
-import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { monthsInRange, type ResolvedDateRange } from "@/lib/date-range";
 
@@ -22,37 +21,41 @@ export interface MonthlyTrendItem {
 // computed once, not reinvented per screen. TransactionService.getSummary
 // (flat totals) is unrelated and unchanged.
 export const AnalyticsService = {
-  // Prisma `groupBy`, not raw SQL: single-dimension aggregation is exactly
-  // what it's for, unlike getSummary's multi-conditional-sum raw query.
+  // Raw SQL, not Prisma `groupBy`: EXPENSE totals need `amount + vatAmount`
+  // per row before grouping (vatAmount rides with whichever category its
+  // transaction belongs to — there's no separate VAT category), which
+  // `groupBy`'s `_sum` can't express across two columns (design.md D1).
   async getCategoryBreakdown(
     userId: string,
     type: "INCOME" | "EXPENSE",
     range: ResolvedDateRange
   ): Promise<CategoryBreakdownItem[]> {
-    const grouped = await prisma.transaction.groupBy({
-      by: ["categoryId"],
-      where: {
-        userId,
-        type,
-        categoryId: { not: null },
-        transactionDate: { gte: range.from, lte: range.to },
-      },
-      _sum: { amount: true },
-    });
+    const grouped = await prisma.$queryRaw<Array<{ categoryId: string; amount: string }>>`
+      SELECT
+        "categoryId",
+        COALESCE(SUM("amount" + COALESCE("vatAmount", 0::numeric(14,2))), 0::numeric(14,2))::text AS "amount"
+      FROM "transactions"
+      WHERE "userId" = ${userId}
+        AND "type" = ${type}::"TransactionType"
+        AND "categoryId" IS NOT NULL
+        AND "transactionDate" >= ${range.from}
+        AND "transactionDate" <= ${range.to}
+      GROUP BY "categoryId"
+    `;
 
     if (grouped.length === 0) return [];
 
     const categories = await prisma.category.findMany({
-      where: { id: { in: grouped.map((row) => row.categoryId as string) } },
+      where: { id: { in: grouped.map((row) => row.categoryId) } },
       select: { id: true, name: true },
     });
     const nameById = new Map(categories.map((category) => [category.id, category.name]));
 
     return grouped
       .map((row) => ({
-        categoryId: row.categoryId as string,
-        categoryName: nameById.get(row.categoryId as string) ?? "Uncategorized",
-        amount: (row._sum.amount ?? new Prisma.Decimal(0)).toFixed(2),
+        categoryId: row.categoryId,
+        categoryName: nameById.get(row.categoryId) ?? "Uncategorized",
+        amount: row.amount,
       }))
       .sort((a, b) => Number(b.amount) - Number(a.amount));
   },
@@ -66,7 +69,7 @@ export const AnalyticsService = {
       SELECT
         to_char(date_trunc('month', "transactionDate"), 'YYYY-MM') AS "month",
         COALESCE(SUM(CASE WHEN "type" = 'INCOME' THEN "amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))::text AS "income",
-        COALESCE(SUM(CASE WHEN "type" = 'EXPENSE' THEN "amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))::text AS "expense"
+        COALESCE(SUM(CASE WHEN "type" = 'EXPENSE' THEN "amount" + COALESCE("vatAmount", 0::numeric(14,2)) ELSE 0::numeric(14,2) END), 0::numeric(14,2))::text AS "expense"
       FROM "transactions"
       WHERE "userId" = ${userId}
         AND "transactionDate" >= ${range.from}

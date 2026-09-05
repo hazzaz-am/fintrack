@@ -18,7 +18,7 @@ The Accounts screen SHALL display each of the current user's active accounts wit
 - **THEN** an empty state is shown prompting them to create their first account, instead of an empty list
 
 ### Requirement: User can create an account
-The Accounts screen SHALL provide a form to create a new account using the existing account validation and service.
+The Accounts screen SHALL provide a form to create a new account using the existing account validation and service. The form SHALL validate fields client-side, using the same schema, before submission.
 
 #### Scenario: Valid account creation
 - **WHEN** the user submits the create-account form with a valid name, type, currency, and opening balance
@@ -28,12 +28,20 @@ The Accounts screen SHALL provide a form to create a new account using the exist
 - **WHEN** the user submits the create-account form with input that fails existing validation
 - **THEN** field-level errors are shown and no account is created
 
+#### Scenario: Field-level errors appear before submit
+- **WHEN** the user blurs an invalid field on the create-account form (e.g. leaves the name empty)
+- **THEN** that field's error is shown immediately, without submitting the form
+
 ### Requirement: User can edit an account
-The Accounts screen SHALL allow editing an existing account's editable fields (name, institution, type, currency, description) without affecting its balance.
+The Accounts screen SHALL allow editing an existing account's editable fields (name, institution, type, currency, description) without affecting its balance. The edit form SHALL validate fields client-side, using the same schema as creation, before submission.
 
 #### Scenario: Valid edit
 - **WHEN** the user edits an account's name or other editable field and submits
 - **THEN** the account reflects the new values and its derived balance is unchanged
+
+#### Scenario: Invalid edit
+- **WHEN** the user edits an account's field to a value that fails validation and submits
+- **THEN** field-level errors are shown and the account is not updated
 
 ### Requirement: User can archive an account
 The Accounts screen SHALL allow archiving an account, after explicit confirmation, removing it from the active list.

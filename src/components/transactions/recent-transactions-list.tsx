@@ -2,9 +2,9 @@ import Link from "next/link";
 import { Inbox, ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { ListRow } from "@/components/ui/list-row";
-import { cn } from "@/lib/utils";
 import type { TransactionListItem } from "@/lib/services/transaction-service";
-import { formatMoney, formatTransactionDate, formatTransactionType } from "./transaction-format";
+import { formatTransactionDate, formatTransactionType } from "./transaction-format";
+import { TransactionAmount } from "./transaction-amount";
 
 // Read-only everywhere it's used (Income, Expenses, Dashboard) — editing and
 // deleting a transaction stays exclusively on the Transactions screen
@@ -35,8 +35,6 @@ export function RecentTransactionsList({
   return (
     <ul className="flex flex-col divide-y divide-border">
       {transactions.map((transaction) => {
-        const amount = Number(transaction.amount);
-        const isExpense = transaction.type === "EXPENSE";
         const isIncome = transaction.type === "INCOME";
         const label =
           transaction.type === "TRANSFER"
@@ -65,16 +63,12 @@ export function RecentTransactionsList({
                   (transaction.accountName ? ` · ${transaction.accountName}` : "")
                 }
                 trailing={
-                  <span
-                    className={cn(
-                      "tabular-nums",
-                      isIncome && "text-positive",
-                      isExpense && "text-negative"
-                    )}
-                  >
-                    {isIncome ? "+" : isExpense ? "−" : ""}
-                    {formatMoney(Math.abs(amount).toFixed(2), currency)}
-                  </span>
+                  <TransactionAmount
+                    amount={transaction.amount}
+                    vatAmount={transaction.vatAmount}
+                    type={transaction.type}
+                    currency={currency}
+                  />
                 }
               />
             </Link>

@@ -71,7 +71,7 @@ describe("AccountService — derived balance", () => {
     expect(await AccountService.getBalance(user.id, account.id)).toBe("-4000.00");
   });
 
-  it("deducts VAT from the account paying an expense, without affecting the expense amount itself", async () => {
+  it("deducts VAT from the account paying an expense, matching the VAT-inclusive expense total", async () => {
     const user = await createTestUser();
     const account = await createTestAccount(user.id, "1000.00");
     const category = await createTestCategory(user.id, "EXPENSE", "Home");
@@ -90,7 +90,7 @@ describe("AccountService — derived balance", () => {
       from: new Date("2026-09-01"),
       to: new Date("2026-09-30"),
     });
-    expect(summary.expense).toBe("100.00");
+    expect(summary.expense).toBe("115.00");
   });
 
   it("deducts VAT from only the source account of a transfer, leaving the destination unaffected", async () => {

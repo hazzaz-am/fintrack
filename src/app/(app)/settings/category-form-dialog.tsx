@@ -1,7 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
 import {
   Dialog,
   DialogTrigger,
@@ -16,9 +15,15 @@ import { Field, FieldGroup, FieldLabel, FieldError } from "@/components/ui/field
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { createCategoryAction, updateCategoryAction, type SettingsActionState } from "./actions";
-
-const initialState: SettingsActionState = {};
+import { useAppForm, handleFieldBlur } from "@/lib/forms/use-app-form";
+import { AppFieldError } from "@/lib/forms/app-field-error";
+import {
+  createCategorySchema,
+  updateCategorySchema,
+  type CreateCategoryInput,
+  type UpdateCategoryInput,
+} from "@/lib/validation/category";
+import { createCategoryAction, updateCategoryAction } from "./actions";
 
 export interface EditableCategory {
   id: string;
@@ -35,28 +40,9 @@ interface CategoryFormDialogProps {
   defaultType?: "INCOME" | "EXPENSE";
 }
 
-function SubmitButton({ label, pendingLabel }: { label: string; pendingLabel: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? pendingLabel : label}
-    </Button>
-  );
-}
-
 export function CategoryFormDialog({ trigger, triggerLabel, category, defaultType }: CategoryFormDialogProps) {
   const [open, setOpen] = useState(false);
   const isEdit = Boolean(category);
-  const action = category ? updateCategoryAction.bind(null, category.id) : createCategoryAction;
-  const [state, formAction] = useActionState(action, initialState);
-
-  const [handledState, setHandledState] = useState(state);
-  if (state !== handledState) {
-    setHandledState(state);
-    if (state.success) {
-      setOpen(false);
-    }
-  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -70,34 +56,163 @@ export function CategoryFormDialog({ trigger, triggerLabel, category, defaultTyp
               : "Add a category to use when recording income or expenses."}
           </DialogDescription>
         </DialogHeader>
-        <form key={String(open)} action={formAction}>
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="name">Name</FieldLabel>
-              <Input id="name" name="name" required maxLength={80} defaultValue={category?.name} />
-              <FieldError errors={state.fieldErrors?.name?.map((message) => ({ message }))} />
-            </Field>
-            {!isEdit && (
-              <Field>
-                <FieldLabel htmlFor="type">Type</FieldLabel>
-                <NativeSelect id="type" name="type" defaultValue={defaultType ?? "EXPENSE"}>
-                  <NativeSelectOption value="INCOME">Income</NativeSelectOption>
-                  <NativeSelectOption value="EXPENSE">Expense</NativeSelectOption>
-                </NativeSelect>
-                <FieldError errors={state.fieldErrors?.type?.map((message) => ({ message }))} />
-              </Field>
-            )}
-            {state.error && <p role="alert" className="text-sm font-medium text-destructive">{state.error}</p>}
-          </FieldGroup>
-          <DialogFooter className="mt-5">
-            <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
-            <SubmitButton
-              label={isEdit ? "Save changes" : "Add category"}
-              pendingLabel={isEdit ? "Saving…" : "Adding…"}
-            />
-          </DialogFooter>
-        </form>
+        {/* Remounted on every open/close (key) so each open starts from fresh field state. */}
+        {category ? (
+          <EditCategoryForm key={String(open)} category={category} onSuccess={() => setOpen(false)} />
+        ) : (
+          <CreateCategoryForm key={String(open)} defaultType={defaultType} onSuccess={() => setOpen(false)} />
+        )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CreateCategoryForm({
+  defaultType,
+  onSuccess,
+}: {
+  defaultType?: "INCOME" | "EXPENSE";
+  onSuccess: () => void;
+}) {
+  const defaultValues: CreateCategoryInput = { name: "", type: defaultType ?? "EXPENSE" };
+  const form = useAppForm({
+    defaultValues,
+    schema: createCategorySchema,
+    action: createCategoryAction,
+    onSuccess,
+  });
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void form.handleSubmit();
+      }}
+    >
+      <FieldGroup>
+        <form.Field name="name">
+          {(field) => (
+            <Field>
+              <FieldLabel htmlFor={field.name}>Name</FieldLabel>
+              <Input
+                id={field.name}
+                name={field.name}
+                maxLength={80}
+                value={field.state.value}
+                onBlur={() => handleFieldBlur(field)}
+                onChange={(e) => field.handleChange(e.target.value)}
+              />
+              <AppFieldError field={field} />
+            </Field>
+          )}
+        </form.Field>
+        <form.Field name="type">
+          {(field) => (
+            <Field>
+              <FieldLabel htmlFor={field.name}>Type</FieldLabel>
+              <NativeSelect
+                id={field.name}
+                name={field.name}
+                value={field.state.value}
+                onBlur={() => handleFieldBlur(field)}
+                onChange={(e) => field.handleChange(e.target.value as "INCOME" | "EXPENSE")}
+              >
+                <NativeSelectOption value="INCOME">Income</NativeSelectOption>
+                <NativeSelectOption value="EXPENSE">Expense</NativeSelectOption>
+              </NativeSelect>
+              <AppFieldError field={field} />
+            </Field>
+          )}
+        </form.Field>
+        <form.Subscribe selector={(state) => state.errorMap.onSubmit}>
+          {(formError) =>
+            formError ? (
+              <FieldError>
+                <p role="alert" className="text-sm font-normal text-destructive">
+                  {String(formError)}
+                </p>
+              </FieldError>
+            ) : null
+          }
+        </form.Subscribe>
+      </FieldGroup>
+      <DialogFooter className="mt-5">
+        <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+        <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
+          {([canSubmit, isSubmitting]) => (
+            <Button type="submit" disabled={!canSubmit}>
+              {isSubmitting ? "Adding…" : "Add category"}
+            </Button>
+          )}
+        </form.Subscribe>
+      </DialogFooter>
+    </form>
+  );
+}
+
+function EditCategoryForm({
+  category,
+  onSuccess,
+}: {
+  category: EditableCategory;
+  onSuccess: () => void;
+}) {
+  const defaultValues: UpdateCategoryInput = { name: category.name };
+  const form = useAppForm({
+    defaultValues,
+    schema: updateCategorySchema,
+    action: updateCategoryAction.bind(null, category.id),
+    onSuccess,
+  });
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void form.handleSubmit();
+      }}
+    >
+      <FieldGroup>
+        <form.Field name="name">
+          {(field) => (
+            <Field>
+              <FieldLabel htmlFor={field.name}>Name</FieldLabel>
+              <Input
+                id={field.name}
+                name={field.name}
+                maxLength={80}
+                value={field.state.value}
+                onBlur={() => handleFieldBlur(field)}
+                onChange={(e) => field.handleChange(e.target.value)}
+              />
+              <AppFieldError field={field} />
+            </Field>
+          )}
+        </form.Field>
+        <form.Subscribe selector={(state) => state.errorMap.onSubmit}>
+          {(formError) =>
+            formError ? (
+              <FieldError>
+                <p role="alert" className="text-sm font-normal text-destructive">
+                  {String(formError)}
+                </p>
+              </FieldError>
+            ) : null
+          }
+        </form.Subscribe>
+      </FieldGroup>
+      <DialogFooter className="mt-5">
+        <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+        <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
+          {([canSubmit, isSubmitting]) => (
+            <Button type="submit" disabled={!canSubmit}>
+              {isSubmitting ? "Saving…" : "Save changes"}
+            </Button>
+          )}
+        </form.Subscribe>
+      </DialogFooter>
+    </form>
   );
 }

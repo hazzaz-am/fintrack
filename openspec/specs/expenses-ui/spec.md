@@ -7,7 +7,7 @@ TBD - created by archiving change transactions-and-analytics-ui. Update Purpose 
 ## Requirements
 
 ### Requirement: Expenses screen shows total expenses and category breakdown for a selected period
-The Expenses screen SHALL display total expenses for a selected period (via the shared date-range resolver) and a breakdown by expense category, sourced from `TransactionService.getSummary` and `AnalyticsService.getCategoryBreakdown`.
+The Expenses screen SHALL display total expenses for a selected period (via the shared date-range resolver) and a breakdown by expense category, sourced from `TransactionService.getSummary` and `AnalyticsService.getCategoryBreakdown`. The total expenses figure SHALL be VAT-inclusive; when the period includes any VAT-bearing expenses, the total SHALL be shown with a caption indicating how much of it is VAT.
 
 #### Scenario: User with expenses in the period
 - **WHEN** an authenticated user with recorded expenses visits `/expenses` for a period containing transactions
@@ -16,6 +16,14 @@ The Expenses screen SHALL display total expenses for a selected period (via the 
 #### Scenario: User with no expenses in the period
 - **WHEN** an authenticated user visits `/expenses` for a period with no expense transactions
 - **THEN** an empty/zero state is shown instead of an empty or broken chart
+
+#### Scenario: Total includes a VAT caption when VAT is present
+- **WHEN** the selected period's expenses total ৳5,565, of which ৳465 is VAT
+- **THEN** the Total expenses card shows ৳5,565 with a muted caption reading the ৳465 VAT portion
+
+#### Scenario: No caption when the period has no VAT
+- **WHEN** the selected period's expenses include no VAT-bearing transactions
+- **THEN** the Total expenses card shows the total with no VAT caption, exactly as before this change
 
 ### Requirement: Expenses screen shows a trend over time
 The Expenses screen SHALL display expenses over time using `AnalyticsService.getMonthlyTrend`.
@@ -39,11 +47,15 @@ The Expenses screen SHALL display the user's most recent expense transactions in
 - **THEN** each entry links to the Transactions screen for editing or deleting, and no inline edit/delete control is present on this screen
 
 ### Requirement: User can quickly record an expense from the Expenses screen
-The Expenses screen SHALL provide a quick-add action to record a new expense transaction, using the same record-expense capability as the Transactions screen.
+The Expenses screen SHALL provide a quick-add action to record a new expense transaction, using the same record-expense capability as the Transactions screen. The quick-add form SHALL validate fields client-side before submission, using the same schema as the Transactions screen's expense form.
 
 #### Scenario: Quick-add expense
 - **WHEN** the user records an expense transaction via the Expenses screen's quick-add action
 - **THEN** the transaction is created and the period's total expenses and breakdown update to include it
+
+#### Scenario: Field-level errors appear before submit
+- **WHEN** the user blurs an invalid field on the quick-add expense form (e.g. a non-numeric amount)
+- **THEN** that field's error is shown immediately, without submitting the form
 
 ### Requirement: Expenses screen remains usable at phone widths
 The expenses list and its filter/entry forms SHALL remain fully usable at phone widths without horizontal scrolling or clipped amounts.

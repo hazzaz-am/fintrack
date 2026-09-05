@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
+import type { z } from "zod";
 import {
   Drawer,
   DrawerTrigger,
@@ -12,27 +12,32 @@ import {
   DrawerFooter,
   DrawerClose,
 } from "@/components/ui/drawer";
-import { Field, FieldGroup, FieldLabel, FieldError, FieldDescription } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { updateTransactionAction, type TransactionActionState } from "./actions";
+import { updateTransactionAction } from "./actions";
+import { updateTransactionSchema } from "@/lib/validation/transaction";
+import { useAppForm, handleFieldBlur } from "@/lib/forms/use-app-form";
+import { AppFieldError } from "@/lib/forms/app-field-error";
 import type { DialogCategory } from "@/components/transactions/record-transaction-dialog";
 import type { TransactionListItem } from "@/lib/services/transaction-service";
 
-const initialState: TransactionActionState = {};
+// `z.input<...>` reports `transactionDate` as `unknown` because `z.coerce.date()`'s
+// input type is intentionally unknown - override it back to the date string this
+// form binds. `vatAmount`/`description` use `null` (not `undefined`) for "cleared",
+// matching the schema's `.nullable()` and the Server Action's `orNull` semantics.
+type EditTransactionValues = Omit<
+  z.input<typeof updateTransactionSchema>,
+  "transactionDate" | "vatAmount" | "description"
+> & {
+  transactionDate: string;
+  vatAmount: string | null;
+  description: string | null;
+};
 
 function toDateInputValue(date: Date): string {
   return new Date(date).toISOString().slice(0, 10);
-}
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? "Saving…" : "Save changes"}
-    </Button>
-  );
 }
 
 export function EditTransactionDialog({
@@ -47,18 +52,6 @@ export function EditTransactionDialog({
   triggerLabel: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const action = updateTransactionAction.bind(null, transaction.id);
-  const [state, formAction] = useActionState(action, initialState);
-
-  const [handledState, setHandledState] = useState(state);
-  if (state !== handledState) {
-    setHandledState(state);
-    if (state.success) setOpen(false);
-  }
-
-  const isTransfer = transaction.type === "TRANSFER" || transaction.type.startsWith("INVESTMENT_");
-  const relevantCategories = categories.filter((category) => category.type === transaction.type);
-  const showVat = transaction.type === "EXPENSE" || transaction.type === "TRANSFER";
 
   return (
     <Drawer open={open} onOpenChange={setOpen}>
@@ -67,73 +60,180 @@ export function EditTransactionDialog({
         <DrawerHeader>
           <DrawerTitle>Edit transaction</DrawerTitle>
           <DrawerDescription>
-            {isTransfer
+            {transaction.type === "TRANSFER" || transaction.type.startsWith("INVESTMENT_")
               ? "Transfers and investment movements have no category — you can still adjust the amount, date, and description."
               : "Update this transaction's amount, category, date, or description."}
           </DrawerDescription>
         </DrawerHeader>
-        <form key={String(open)} action={formAction} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <FieldGroup>
-            {!isTransfer && (
-              <Field>
-                <FieldLabel htmlFor="categoryId">Category</FieldLabel>
-                <NativeSelect id="categoryId" name="categoryId" defaultValue={transaction.categoryId ?? undefined}>
-                  {relevantCategories.map((category) => (
-                    <NativeSelectOption key={category.id} value={category.id}>
-                      {category.name}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-                <FieldError errors={state.fieldErrors?.categoryId?.map((message) => ({ message }))} />
-              </Field>
-            )}
-            <Field>
-              <FieldLabel htmlFor="amount">Amount</FieldLabel>
-              <Input id="amount" name="amount" inputMode="decimal" defaultValue={transaction.amount} />
-              <FieldError errors={state.fieldErrors?.amount?.map((message) => ({ message }))} />
-            </Field>
-            {showVat && (
-              <Field>
-                <FieldLabel htmlFor="vatAmount">VAT (optional)</FieldLabel>
-                <Input
-                  id="vatAmount"
-                  name="vatAmount"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  defaultValue={transaction.vatAmount ?? ""}
-                />
-                <FieldDescription>
-                  Deducted from the {transaction.type === "TRANSFER" ? "from account" : "account"} in addition to the amount above.
-                </FieldDescription>
-                <FieldError errors={state.fieldErrors?.vatAmount?.map((message) => ({ message }))} />
-              </Field>
-            )}
-            <Field>
-              <FieldLabel htmlFor="transactionDate">Date</FieldLabel>
-              <Input
-                id="transactionDate"
-                name="transactionDate"
-                type="date"
-                defaultValue={toDateInputValue(transaction.transactionDate)}
-              />
-              <FieldError errors={state.fieldErrors?.transactionDate?.map((message) => ({ message }))} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="description">Description</FieldLabel>
-              <Input id="description" name="description" maxLength={300} defaultValue={transaction.description ?? ""} />
-              <FieldDescription>The account this transaction is recorded against can&apos;t be changed here — delete and re-record it instead.</FieldDescription>
-              <FieldError errors={state.fieldErrors?.description?.map((message) => ({ message }))} />
-            </Field>
-            {state.error && <p role="alert" className="text-sm font-medium text-destructive">{state.error}</p>}
-          </FieldGroup>
-          </div>
-          <DrawerFooter>
-            <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
-            <SubmitButton />
-          </DrawerFooter>
-        </form>
+        {/* Remounted on every open (key) so each open starts from fresh field state. */}
+        <EditTransactionForm
+          key={String(open)}
+          transaction={transaction}
+          categories={categories}
+          onSuccess={() => setOpen(false)}
+        />
       </DrawerContent>
     </Drawer>
+  );
+}
+
+function EditTransactionForm({
+  transaction,
+  categories,
+  onSuccess,
+}: {
+  transaction: TransactionListItem;
+  categories: DialogCategory[];
+  onSuccess: () => void;
+}) {
+  const isTransfer = transaction.type === "TRANSFER" || transaction.type.startsWith("INVESTMENT_");
+  const relevantCategories = categories.filter((category) => category.type === transaction.type);
+  const showVat = transaction.type === "EXPENSE" || transaction.type === "TRANSFER";
+
+  const defaultValues: EditTransactionValues = {
+    categoryId: transaction.categoryId ?? undefined,
+    amount: transaction.amount,
+    vatAmount: transaction.vatAmount ?? null,
+    transactionDate: toDateInputValue(transaction.transactionDate),
+    description: transaction.description ?? null,
+  };
+  const form = useAppForm({
+    defaultValues,
+    schema: updateTransactionSchema as unknown as z.ZodType<unknown, EditTransactionValues>,
+    action: updateTransactionAction.bind(null, transaction.id),
+    onSuccess,
+  });
+
+  return (
+    <form
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void form.handleSubmit();
+      }}
+    >
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <FieldGroup>
+          {!isTransfer && (
+            <form.Field name="categoryId">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Category</FieldLabel>
+                  <NativeSelect
+                    id={field.name}
+                    name={field.name}
+                    value={field.state.value ?? ""}
+                    onBlur={() => handleFieldBlur(field)}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  >
+                    {relevantCategories.map((category) => (
+                      <NativeSelectOption key={category.id} value={category.id}>
+                        {category.name}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                  <AppFieldError field={field} />
+                </Field>
+              )}
+            </form.Field>
+          )}
+          <form.Field name="amount">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Amount</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  inputMode="decimal"
+                  value={field.state.value ?? ""}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                />
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          {showVat && (
+            <form.Field name="vatAmount">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>VAT (optional)</FieldLabel>
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={field.state.value ?? ""}
+                    onBlur={() => handleFieldBlur(field)}
+                    onChange={(e) => field.handleChange(e.target.value === "" ? null : e.target.value)}
+                  />
+                  <FieldDescription>
+                    Deducted from the {transaction.type === "TRANSFER" ? "from account" : "account"} in addition to
+                    the amount above.
+                  </FieldDescription>
+                  <AppFieldError field={field} />
+                </Field>
+              )}
+            </form.Field>
+          )}
+          <form.Field name="transactionDate">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Date</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  type="date"
+                  value={field.state.value}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                />
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          <form.Field name="description">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Description</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  maxLength={300}
+                  value={field.state.value ?? ""}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value === "" ? null : e.target.value)}
+                />
+                <FieldDescription>
+                  The account this transaction is recorded against can&apos;t be changed here — delete and re-record
+                  it instead.
+                </FieldDescription>
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          <form.Subscribe selector={(state) => state.errorMap.onSubmit}>
+            {(formError) =>
+              formError ? (
+                <p role="alert" className="text-sm font-medium text-destructive">
+                  {String(formError)}
+                </p>
+              ) : null
+            }
+          </form.Subscribe>
+        </FieldGroup>
+      </div>
+      <DrawerFooter>
+        <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
+        <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
+          {([canSubmit, isSubmitting]) => (
+            <Button type="submit" disabled={!canSubmit}>
+              {isSubmitting ? "Saving…" : "Save changes"}
+            </Button>
+          )}
+        </form.Subscribe>
+      </DrawerFooter>
+    </form>
   );
 }

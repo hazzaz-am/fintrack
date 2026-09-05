@@ -8,7 +8,8 @@ import type { DialogAccount, DialogCategory } from "@/components/transactions/re
 import { RecordTransactionDialog } from "@/components/transactions/record-transaction-dialog";
 import { EditTransactionDialog } from "./edit-transaction-dialog";
 import { DeleteTransactionDialog } from "./delete-transaction-dialog";
-import { formatMoney, formatTransactionDate, formatTransactionType } from "@/components/transactions/transaction-format";
+import { formatTransactionDate, formatTransactionType } from "@/components/transactions/transaction-format";
+import { TransactionAmount } from "@/components/transactions/transaction-amount";
 
 export function TransactionTable({
   transactions,
@@ -52,9 +53,7 @@ export function TransactionTable({
   return (
     <ul className="flex flex-col divide-y divide-border">
       {transactions.map((transaction) => {
-        const amount = Number(transaction.amount);
         const isIncome = transaction.type === "INCOME";
-        const isExpense = transaction.type === "EXPENSE";
         const accountLabel =
           transaction.type === "TRANSFER"
             ? `${transaction.sourceAccountName ?? "?"} → ${transaction.destinationAccountName ?? "?"}`
@@ -88,16 +87,12 @@ export function TransactionTable({
               subtitle={subtitleParts.join(" · ")}
               trailing={
                 <div className="flex items-center gap-1">
-                  <span
-                    className={cn(
-                      "tabular-nums",
-                      isIncome && "text-positive",
-                      isExpense && "text-negative"
-                    )}
-                  >
-                    {isIncome ? "+" : isExpense ? "−" : ""}
-                    {formatMoney(Math.abs(amount).toFixed(2), currency)}
-                  </span>
+                  <TransactionAmount
+                    amount={transaction.amount}
+                    vatAmount={transaction.vatAmount}
+                    type={transaction.type}
+                    currency={currency}
+                  />
                   <EditTransactionDialog
                     transaction={transaction}
                     categories={categories}

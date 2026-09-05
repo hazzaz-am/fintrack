@@ -1,29 +1,17 @@
 "use client";
 
-import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Field, FieldGroup, FieldLabel, FieldError } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { updateProfileAction, changePasswordAction, type SettingsActionState } from "./actions";
+import { updateProfileAction, changePasswordAction } from "./actions";
+import { updateProfileSchema, changePasswordSchema } from "@/lib/validation/auth";
+import { useAppForm, handleFieldBlur } from "@/lib/forms/use-app-form";
+import { AppFieldError } from "@/lib/forms/app-field-error";
 import type { PublicUser } from "@/lib/services/auth-service";
 
-const initialState: SettingsActionState = {};
-
-function SubmitButton({ label, pendingLabel }: { label: string; pendingLabel: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? pendingLabel : label}
-    </Button>
-  );
-}
-
 export function ProfileSection({ user }: { user: PublicUser }) {
-  const [profileState, profileAction] = useActionState(updateProfileAction, initialState);
-  const [passwordState, passwordAction] = useActionState(changePasswordAction, initialState);
-
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Card>
@@ -32,31 +20,7 @@ export function ProfileSection({ user }: { user: PublicUser }) {
           <CardDescription>Your name and email.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={profileAction}>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="name">Name</FieldLabel>
-                <Input id="name" name="name" required maxLength={120} defaultValue={user.name} />
-                <FieldError errors={profileState.fieldErrors?.name?.map((message) => ({ message }))} />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input id="email" name="email" type="email" required defaultValue={user.email} />
-                <FieldError errors={profileState.fieldErrors?.email?.map((message) => ({ message }))} />
-              </Field>
-              {profileState.error && (
-                <p role="alert" className="text-sm font-medium text-destructive">
-                  {profileState.error}
-                </p>
-              )}
-              {profileState.success && (
-                <p className="text-sm font-medium text-positive">Profile updated.</p>
-              )}
-            </FieldGroup>
-            <div className="mt-4 flex justify-end">
-              <SubmitButton label="Save changes" pendingLabel="Saving…" />
-            </div>
-          </form>
+          <ProfileForm user={user} />
         </CardContent>
       </Card>
 
@@ -66,33 +30,165 @@ export function ProfileSection({ user }: { user: PublicUser }) {
           <CardDescription>Requires your current password.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={passwordAction} key={passwordState.success ? "reset" : "form"}>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="currentPassword">Current password</FieldLabel>
-                <Input id="currentPassword" name="currentPassword" type="password" required />
-                <FieldError errors={passwordState.fieldErrors?.currentPassword?.map((message) => ({ message }))} />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="newPassword">New password</FieldLabel>
-                <Input id="newPassword" name="newPassword" type="password" required minLength={8} />
-                <FieldError errors={passwordState.fieldErrors?.newPassword?.map((message) => ({ message }))} />
-              </Field>
-              {passwordState.error && (
-                <p role="alert" className="text-sm font-medium text-destructive">
-                  {passwordState.error}
-                </p>
-              )}
-              {passwordState.success && (
-                <p className="text-sm font-medium text-positive">Password changed.</p>
-              )}
-            </FieldGroup>
-            <div className="mt-4 flex justify-end">
-              <SubmitButton label="Change password" pendingLabel="Changing…" />
-            </div>
-          </form>
+          <PasswordForm />
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function ProfileForm({ user }: { user: PublicUser }) {
+  const [justSucceeded, setJustSucceeded] = useState(false);
+
+  const form = useAppForm({
+    defaultValues: { name: user.name, email: user.email },
+    schema: updateProfileSchema,
+    action: updateProfileAction,
+    onSuccess: () => setJustSucceeded(true),
+  });
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setJustSucceeded(false);
+        void form.handleSubmit();
+      }}
+    >
+      <FieldGroup>
+        <form.Field name="name">
+          {(field) => (
+            <Field>
+              <FieldLabel htmlFor={field.name}>Name</FieldLabel>
+              <Input
+                id={field.name}
+                name={field.name}
+                maxLength={120}
+                value={field.state.value ?? ""}
+                onBlur={() => handleFieldBlur(field)}
+                onChange={(e) => field.handleChange(e.target.value)}
+              />
+              <AppFieldError field={field} />
+            </Field>
+          )}
+        </form.Field>
+        <form.Field name="email">
+          {(field) => (
+            <Field>
+              <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+              <Input
+                id={field.name}
+                name={field.name}
+                type="email"
+                value={field.state.value ?? ""}
+                onBlur={() => handleFieldBlur(field)}
+                onChange={(e) => field.handleChange(e.target.value)}
+              />
+              <AppFieldError field={field} />
+            </Field>
+          )}
+        </form.Field>
+        <form.Subscribe selector={(state) => state.errorMap.onSubmit}>
+          {(formError) =>
+            formError ? (
+              <p role="alert" className="text-sm font-medium text-destructive">
+                {String(formError)}
+              </p>
+            ) : null
+          }
+        </form.Subscribe>
+        {justSucceeded && <p className="text-sm font-medium text-positive">Profile updated.</p>}
+      </FieldGroup>
+      <div className="mt-4 flex justify-end">
+        <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
+          {([canSubmit, isSubmitting]) => (
+            <Button type="submit" disabled={!canSubmit}>
+              {isSubmitting ? "Saving…" : "Save changes"}
+            </Button>
+          )}
+        </form.Subscribe>
+      </div>
+    </form>
+  );
+}
+
+function PasswordForm() {
+  const [justSucceeded, setJustSucceeded] = useState(false);
+
+  const form = useAppForm({
+    defaultValues: { currentPassword: "", newPassword: "" },
+    schema: changePasswordSchema,
+    action: changePasswordAction,
+    onSuccess: () => {
+      setJustSucceeded(true);
+      form.reset();
+    },
+  });
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setJustSucceeded(false);
+        void form.handleSubmit();
+      }}
+    >
+      <FieldGroup>
+        <form.Field name="currentPassword">
+          {(field) => (
+            <Field>
+              <FieldLabel htmlFor={field.name}>Current password</FieldLabel>
+              <Input
+                id={field.name}
+                name={field.name}
+                type="password"
+                value={field.state.value}
+                onBlur={() => handleFieldBlur(field)}
+                onChange={(e) => field.handleChange(e.target.value)}
+              />
+              <AppFieldError field={field} />
+            </Field>
+          )}
+        </form.Field>
+        <form.Field name="newPassword">
+          {(field) => (
+            <Field>
+              <FieldLabel htmlFor={field.name}>New password</FieldLabel>
+              <Input
+                id={field.name}
+                name={field.name}
+                type="password"
+                minLength={8}
+                value={field.state.value}
+                onBlur={() => handleFieldBlur(field)}
+                onChange={(e) => field.handleChange(e.target.value)}
+              />
+              <AppFieldError field={field} />
+            </Field>
+          )}
+        </form.Field>
+        <form.Subscribe selector={(state) => state.errorMap.onSubmit}>
+          {(formError) =>
+            formError ? (
+              <p role="alert" className="text-sm font-medium text-destructive">
+                {String(formError)}
+              </p>
+            ) : null
+          }
+        </form.Subscribe>
+        {justSucceeded && <p className="text-sm font-medium text-positive">Password changed.</p>}
+      </FieldGroup>
+      <div className="mt-4 flex justify-end">
+        <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
+          {([canSubmit, isSubmitting]) => (
+            <Button type="submit" disabled={!canSubmit}>
+              {isSubmitting ? "Changing…" : "Change password"}
+            </Button>
+          )}
+        </form.Subscribe>
+      </div>
+    </form>
   );
 }

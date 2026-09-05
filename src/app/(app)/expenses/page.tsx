@@ -93,6 +93,9 @@ export default async function ExpensesPage({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold tabular-nums text-negative">{formatMoney(summary.expense, currency)}</div>
+            {Number(summary.expenseVat) > 0 && (
+              <p className="text-sm text-muted-foreground">incl. {formatMoney(summary.expenseVat, currency)} VAT</p>
+            )}
           </CardContent>
         </Card>
         <Card>

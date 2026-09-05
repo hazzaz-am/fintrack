@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
+import type { z } from "zod";
 import {
   Drawer,
   DrawerTrigger,
@@ -13,17 +13,25 @@ import {
   DrawerClose,
 } from "@/components/ui/drawer";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Field, FieldGroup, FieldLabel, FieldError, FieldDescription } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { recordMaturityAction, type InvestmentActionState } from "./actions";
+import { recordMaturityAction } from "./actions";
+import { recordMaturityOrWithdrawalSchema } from "@/lib/validation/investment";
+import { useAppForm, handleFieldBlur } from "@/lib/forms/use-app-form";
+import { AppFieldError } from "@/lib/forms/app-field-error";
 import type { DialogAccount } from "./investment-form-dialog";
 import { formatMoney } from "@/components/transactions/transaction-format";
 
-const initialState: InvestmentActionState = {};
-
 type Outcome = "MATURED" | "WITHDRAWN";
+
+// `investmentId`/`newStatus` aren't directly-rendered fields (newStatus is driven by
+// the Outcome tabs below). `z.input<...>` reports `transactionDate` as `unknown`
+// because `z.coerce.date()`'s input type is intentionally unknown - override it.
+type RecordMaturityValues = Omit<z.input<typeof recordMaturityOrWithdrawalSchema>, "transactionDate"> & {
+  transactionDate: string;
+};
 
 interface RecordMaturityDialogProps {
   trigger: React.ReactElement;
@@ -34,15 +42,6 @@ interface RecordMaturityDialogProps {
   availablePrincipal: string;
   currency: string;
   maturityDate: Date | string | null;
-}
-
-function SubmitButton({ disabled }: { disabled?: boolean }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending || disabled}>
-      {pending ? "Recording…" : "Record"}
-    </Button>
-  );
 }
 
 function today(): string {
@@ -69,108 +68,209 @@ export function RecordMaturityDialog({
   maturityDate,
 }: RecordMaturityDialogProps) {
   const [open, setOpen] = useState(false);
-  const action = recordMaturityAction.bind(null, investmentId);
-  const [state, formAction] = useActionState(action, initialState);
-  const [outcome, setOutcome] = useState<Outcome>(defaultOutcome(maturityDate));
-  const [principalAmount, setPrincipalAmount] = useState(availablePrincipal);
-
-  const [handledState, setHandledState] = useState(state);
-  if (state !== handledState) {
-    setHandledState(state);
-    if (state.success) {
-      setOpen(false);
-    }
-  }
-
-  const exceedsAvailable = Number(principalAmount || 0) > Number(availablePrincipal);
 
   return (
-    <Drawer
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) {
-          setOutcome(defaultOutcome(maturityDate));
-          setPrincipalAmount(availablePrincipal);
-        }
-      }}
-    >
+    <Drawer open={open} onOpenChange={setOpen}>
       <DrawerTrigger render={trigger}>{triggerLabel}</DrawerTrigger>
       <DrawerContent>
         <DrawerHeader>
           <DrawerTitle>Record maturity or withdrawal — {investmentName}</DrawerTitle>
-          <DrawerDescription>
-            Available principal: {formatMoney(availablePrincipal, currency)}
-          </DrawerDescription>
+          <DrawerDescription>Available principal: {formatMoney(availablePrincipal, currency)}</DrawerDescription>
         </DrawerHeader>
-        <form key={String(open)} action={formAction} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <input type="hidden" name="newStatus" value={outcome} />
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="accountId">To account</FieldLabel>
-              <NativeSelect id="accountId" name="accountId" defaultValue={accounts[0]?.id}>
-                {accounts.map((account) => (
-                  <NativeSelectOption key={account.id} value={account.id}>
-                    {account.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-              <FieldError errors={state.fieldErrors?.accountId?.map((message) => ({ message }))} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="principalAmount">Principal returned</FieldLabel>
-              <Input
-                id="principalAmount"
-                name="principalAmount"
-                inputMode="decimal"
-                required
-                value={principalAmount}
-                onChange={(event) => setPrincipalAmount(event.target.value)}
-              />
-              {exceedsAvailable ? (
-                <FieldError>
-                  Only {formatMoney(availablePrincipal, currency)} of principal is available on this investment.
-                </FieldError>
-              ) : (
-                <FieldError errors={state.fieldErrors?.principalAmount?.map((message) => ({ message }))} />
-              )}
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="profitAmount">Profit (optional)</FieldLabel>
-              <Input id="profitAmount" name="profitAmount" inputMode="decimal" placeholder="0.00" />
-              <FieldDescription>Recorded as a separate Income → Investment Return transaction.</FieldDescription>
-              <FieldError errors={state.fieldErrors?.profitAmount?.map((message) => ({ message }))} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="transactionDate">Date</FieldLabel>
-              <Input id="transactionDate" name="transactionDate" type="date" required defaultValue={today()} />
-              <FieldError errors={state.fieldErrors?.transactionDate?.map((message) => ({ message }))} />
-            </Field>
-            <Field>
-              <FieldLabel>Outcome</FieldLabel>
-              <Tabs value={outcome} onValueChange={(value) => setOutcome(value as Outcome)}>
-                <TabsList>
-                  <TabsTrigger value="MATURED">Matured</TabsTrigger>
-                  <TabsTrigger value="WITHDRAWN">Withdrawn early</TabsTrigger>
-                </TabsList>
-              </Tabs>
-              <FieldDescription>This closes the investment — it can no longer receive contributions afterward.</FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="description">Description</FieldLabel>
-              <Input id="description" name="description" maxLength={300} />
-              <FieldError errors={state.fieldErrors?.description?.map((message) => ({ message }))} />
-            </Field>
-            {state.error && <p role="alert" className="text-sm font-medium text-destructive">{state.error}</p>}
-          </FieldGroup>
-          </div>
-          <DrawerFooter>
-            <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
-            <SubmitButton disabled={exceedsAvailable} />
-          </DrawerFooter>
-        </form>
+        {/* Remounted on every open (key) so each open starts from fresh field state. */}
+        <RecordMaturityForm
+          key={String(open)}
+          investmentId={investmentId}
+          accounts={accounts}
+          availablePrincipal={availablePrincipal}
+          currency={currency}
+          maturityDate={maturityDate}
+          onSuccess={() => setOpen(false)}
+        />
       </DrawerContent>
     </Drawer>
+  );
+}
+
+function RecordMaturityForm({
+  investmentId,
+  accounts,
+  availablePrincipal,
+  currency,
+  maturityDate,
+  onSuccess,
+}: {
+  investmentId: string;
+  accounts: DialogAccount[];
+  availablePrincipal: string;
+  currency: string;
+  maturityDate: Date | string | null;
+  onSuccess: () => void;
+}) {
+  const [outcome, setOutcome] = useState<Outcome>(defaultOutcome(maturityDate));
+
+  const defaultValues: RecordMaturityValues = {
+    investmentId,
+    accountId: accounts[0]?.id ?? "",
+    principalAmount: availablePrincipal,
+    profitAmount: undefined,
+    transactionDate: today(),
+    newStatus: outcome,
+    description: undefined,
+  };
+  // Client-only guard against exceeding available principal (design.md Decision 3)
+  // - `availablePrincipal` is a per-investment runtime value the shared schema
+  // can't hardcode, so it's added as an instance-level refine on top of it.
+  const schema = recordMaturityOrWithdrawalSchema.refine(
+    (data) => Number(data.principalAmount) <= Number(availablePrincipal),
+    {
+      message: `Only ${formatMoney(availablePrincipal, currency)} of principal is available on this investment.`,
+      path: ["principalAmount"],
+    }
+  );
+  const form = useAppForm({
+    defaultValues,
+    schema: schema as unknown as z.ZodType<unknown, RecordMaturityValues>,
+    action: recordMaturityAction.bind(null, investmentId),
+    onSuccess,
+  });
+
+  return (
+    <form
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void form.handleSubmit();
+      }}
+    >
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <FieldGroup>
+          <form.Field name="accountId">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>To account</FieldLabel>
+                <NativeSelect
+                  id={field.name}
+                  name={field.name}
+                  value={field.state.value}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                >
+                  {accounts.map((account) => (
+                    <NativeSelectOption key={account.id} value={account.id}>
+                      {account.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          <form.Field name="principalAmount">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Principal returned</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  inputMode="decimal"
+                  value={field.state.value}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                />
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          <form.Field name="profitAmount">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Profit (optional)</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={field.state.value ?? ""}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value === "" ? undefined : e.target.value)}
+                />
+                <FieldDescription>Recorded as a separate Income → Investment Return transaction.</FieldDescription>
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          <form.Field name="transactionDate">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Date</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  type="date"
+                  value={field.state.value}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                />
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          <Field>
+            <FieldLabel>Outcome</FieldLabel>
+            <Tabs
+              value={outcome}
+              onValueChange={(value) => {
+                const next = value as Outcome;
+                setOutcome(next);
+                form.setFieldValue("newStatus", next);
+              }}
+            >
+              <TabsList>
+                <TabsTrigger value="MATURED">Matured</TabsTrigger>
+                <TabsTrigger value="WITHDRAWN">Withdrawn early</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <FieldDescription>This closes the investment — it can no longer receive contributions afterward.</FieldDescription>
+          </Field>
+          <form.Field name="description">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Description</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  maxLength={300}
+                  value={field.state.value ?? ""}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value === "" ? undefined : e.target.value)}
+                />
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          <form.Subscribe selector={(state) => state.errorMap.onSubmit}>
+            {(formError) =>
+              formError ? (
+                <p role="alert" className="text-sm font-medium text-destructive">
+                  {String(formError)}
+                </p>
+              ) : null
+            }
+          </form.Subscribe>
+        </FieldGroup>
+      </div>
+      <DrawerFooter>
+        <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
+        <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
+          {([canSubmit, isSubmitting]) => (
+            <Button type="submit" disabled={!canSubmit}>
+              {isSubmitting ? "Recording…" : "Record"}
+            </Button>
+          )}
+        </form.Subscribe>
+      </DrawerFooter>
+    </form>
   );
 }

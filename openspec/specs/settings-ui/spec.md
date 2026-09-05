@@ -14,7 +14,7 @@ The system SHALL provide a `/settings` screen reachable from the sidebar, and th
 - **THEN** they are taken to the Settings screen, and the sidebar indicates Settings as the active section
 
 ### Requirement: Settings screen shows a Profile section
-The Settings screen SHALL include a Profile section displaying the current user's name and email, with a form to edit them and a separate form to change password.
+The Settings screen SHALL include a Profile section displaying the current user's name and email, with a form to edit them and a separate form to change password. Both forms SHALL validate fields client-side (format/shape rules) before submission, using the same schemas their Server Actions validate with; whether an email is already in use by another user, or the current password is correct, remain server-side checks.
 
 #### Scenario: Viewing profile
 - **WHEN** the authenticated user opens Settings
@@ -35,6 +35,10 @@ The Settings screen SHALL include a Profile section displaying the current user'
 #### Scenario: Changing password with wrong current password
 - **WHEN** the user submits the change-password form with an incorrect current password
 - **THEN** the system rejects the change with a validation error and the password remains unchanged
+
+#### Scenario: Field-level errors appear before submit
+- **WHEN** the user blurs a malformed email field on the profile form, or a too-short new-password field on the change-password form
+- **THEN** that field's error is shown immediately, without submitting the form
 
 ### Requirement: Settings screen shows a Categories section
 The Settings screen SHALL include a Categories section listing the user's income and expense categories, with actions to create, rename, and delete each one.

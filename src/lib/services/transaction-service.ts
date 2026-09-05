@@ -228,14 +228,18 @@ export const TransactionService = {
     return { items, total, page, pageSize };
   },
 
+  // Expense (and net cash flow) include VAT — vatAmount is deducted from the
+  // paying account the same as amount (AccountService.computeBalances), so
+  // the total shown here must match that, not just sum `amount` (design.md D1).
   async getSummary(userId: string, range: { from: Date; to: Date }) {
-    const rows = await prisma.$queryRaw<Array<{ income: string; expense: string; netCashFlow: string }>>`
+    const rows = await prisma.$queryRaw<Array<{ income: string; expense: string; expenseVat: string; netCashFlow: string }>>`
       SELECT
         COALESCE(SUM(CASE WHEN "type" = 'INCOME' THEN "amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))::text AS "income",
-        COALESCE(SUM(CASE WHEN "type" = 'EXPENSE' THEN "amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))::text AS "expense",
+        COALESCE(SUM(CASE WHEN "type" = 'EXPENSE' THEN "amount" + COALESCE("vatAmount", 0::numeric(14,2)) ELSE 0::numeric(14,2) END), 0::numeric(14,2))::text AS "expense",
+        COALESCE(SUM(CASE WHEN "type" = 'EXPENSE' THEN COALESCE("vatAmount", 0::numeric(14,2)) ELSE 0::numeric(14,2) END), 0::numeric(14,2))::text AS "expenseVat",
         (
           COALESCE(SUM(CASE WHEN "type" = 'INCOME' THEN "amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
-          - COALESCE(SUM(CASE WHEN "type" = 'EXPENSE' THEN "amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
+          - COALESCE(SUM(CASE WHEN "type" = 'EXPENSE' THEN "amount" + COALESCE("vatAmount", 0::numeric(14,2)) ELSE 0::numeric(14,2) END), 0::numeric(14,2))
         )::text AS "netCashFlow"
       FROM "transactions"
       WHERE "userId" = ${userId}
@@ -243,6 +247,6 @@ export const TransactionService = {
         AND "transactionDate" <= ${range.to}
     `;
 
-    return rows[0] ?? { income: "0.00", expense: "0.00", netCashFlow: "0.00" };
+    return rows[0] ?? { income: "0.00", expense: "0.00", expenseVat: "0.00", netCashFlow: "0.00" };
   },
 };

@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
+import type { z } from "zod";
 import {
   Drawer,
   DrawerTrigger,
@@ -12,14 +12,23 @@ import {
   DrawerFooter,
   DrawerClose,
 } from "@/components/ui/drawer";
-import { Field, FieldGroup, FieldLabel, FieldError } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { contributeAction, type InvestmentActionState } from "./actions";
+import { contributeAction } from "./actions";
+import { contributeInvestmentSchema } from "@/lib/validation/investment";
+import { useAppForm, handleFieldBlur } from "@/lib/forms/use-app-form";
+import { AppFieldError } from "@/lib/forms/app-field-error";
 import type { DialogAccount } from "./investment-form-dialog";
 
-const initialState: InvestmentActionState = {};
+// `investmentId` isn't a rendered field - it's a fixed value matching the prop,
+// included only so the shared schema (which requires it) validates. `z.input<...>`
+// reports `transactionDate` as `unknown` because `z.coerce.date()`'s input type is
+// intentionally unknown - override it back to the plain date string this form binds.
+type ContributeValues = Omit<z.input<typeof contributeInvestmentSchema>, "transactionDate"> & {
+  transactionDate: string;
+};
 
 interface ContributeDialogProps {
   trigger: React.ReactElement;
@@ -29,31 +38,18 @@ interface ContributeDialogProps {
   accounts: DialogAccount[];
 }
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? "Recording…" : "Record contribution"}
-    </Button>
-  );
-}
-
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function ContributeDialog({ trigger, triggerLabel, investmentId, investmentName, accounts }: ContributeDialogProps) {
+export function ContributeDialog({
+  trigger,
+  triggerLabel,
+  investmentId,
+  investmentName,
+  accounts,
+}: ContributeDialogProps) {
   const [open, setOpen] = useState(false);
-  const action = contributeAction.bind(null, investmentId);
-  const [state, formAction] = useActionState(action, initialState);
-
-  const [handledState, setHandledState] = useState(state);
-  if (state !== handledState) {
-    setHandledState(state);
-    if (state.success) {
-      setOpen(false);
-    }
-  }
 
   return (
     <Drawer open={open} onOpenChange={setOpen}>
@@ -63,44 +59,143 @@ export function ContributeDialog({ trigger, triggerLabel, investmentId, investme
           <DrawerTitle>Contribute to {investmentName}</DrawerTitle>
           <DrawerDescription>Fund this investment from one of your accounts.</DrawerDescription>
         </DrawerHeader>
-        <form key={String(open)} action={formAction} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="accountId">From account</FieldLabel>
-              <NativeSelect id="accountId" name="accountId" defaultValue={accounts[0]?.id}>
-                {accounts.map((account) => (
-                  <NativeSelectOption key={account.id} value={account.id}>
-                    {account.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-              <FieldError errors={state.fieldErrors?.accountId?.map((message) => ({ message }))} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="amount">Amount</FieldLabel>
-              <Input id="amount" name="amount" inputMode="decimal" required placeholder="0.00" />
-              <FieldError errors={state.fieldErrors?.amount?.map((message) => ({ message }))} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="transactionDate">Date</FieldLabel>
-              <Input id="transactionDate" name="transactionDate" type="date" required defaultValue={today()} />
-              <FieldError errors={state.fieldErrors?.transactionDate?.map((message) => ({ message }))} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="description">Description</FieldLabel>
-              <Input id="description" name="description" maxLength={300} />
-              <FieldError errors={state.fieldErrors?.description?.map((message) => ({ message }))} />
-            </Field>
-            {state.error && <p role="alert" className="text-sm font-medium text-destructive">{state.error}</p>}
-          </FieldGroup>
-          </div>
-          <DrawerFooter>
-            <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
-            <SubmitButton />
-          </DrawerFooter>
-        </form>
+        {/* Remounted on every open (key) so each open starts from fresh field state. */}
+        <ContributeForm
+          key={String(open)}
+          investmentId={investmentId}
+          accounts={accounts}
+          onSuccess={() => setOpen(false)}
+        />
       </DrawerContent>
     </Drawer>
+  );
+}
+
+function ContributeForm({
+  investmentId,
+  accounts,
+  onSuccess,
+}: {
+  investmentId: string;
+  accounts: DialogAccount[];
+  onSuccess: () => void;
+}) {
+  const defaultValues: ContributeValues = {
+    investmentId,
+    accountId: accounts[0]?.id ?? "",
+    amount: "",
+    transactionDate: today(),
+    description: undefined,
+  };
+  const form = useAppForm({
+    defaultValues,
+    schema: contributeInvestmentSchema as unknown as z.ZodType<unknown, ContributeValues>,
+    action: contributeAction.bind(null, investmentId),
+    onSuccess,
+  });
+
+  return (
+    <form
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void form.handleSubmit();
+      }}
+    >
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <FieldGroup>
+          <form.Field name="accountId">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>From account</FieldLabel>
+                <NativeSelect
+                  id={field.name}
+                  name={field.name}
+                  value={field.state.value}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                >
+                  {accounts.map((account) => (
+                    <NativeSelectOption key={account.id} value={account.id}>
+                      {account.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          <form.Field name="amount">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Amount</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={field.state.value}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                />
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          <form.Field name="transactionDate">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Date</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  type="date"
+                  value={field.state.value}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                />
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          <form.Field name="description">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Description</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  maxLength={300}
+                  value={field.state.value ?? ""}
+                  onBlur={() => handleFieldBlur(field)}
+                  onChange={(e) => field.handleChange(e.target.value === "" ? undefined : e.target.value)}
+                />
+                <AppFieldError field={field} />
+              </Field>
+            )}
+          </form.Field>
+          <form.Subscribe selector={(state) => state.errorMap.onSubmit}>
+            {(formError) =>
+              formError ? (
+                <p role="alert" className="text-sm font-medium text-destructive">
+                  {String(formError)}
+                </p>
+              ) : null
+            }
+          </form.Subscribe>
+        </FieldGroup>
+      </div>
+      <DrawerFooter>
+        <DrawerClose render={<Button type="button" variant="outline" />}>Cancel</DrawerClose>
+        <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting] as const}>
+          {([canSubmit, isSubmitting]) => (
+            <Button type="submit" disabled={!canSubmit}>
+              {isSubmitting ? "Recording…" : "Record contribution"}
+            </Button>
+          )}
+        </form.Subscribe>
+      </DrawerFooter>
+    </form>
   );
 }

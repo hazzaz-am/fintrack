@@ -40,6 +40,27 @@ describe("AnalyticsService.getCategoryBreakdown", () => {
     ]);
   });
 
+  it("includes VAT in a category's total", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const electronics = await createTestCategory(user.id, "EXPENSE", "Electronics");
+
+    await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: electronics.id,
+      amount: "3000.00",
+      vatAmount: "450.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+
+    const breakdown = await AnalyticsService.getCategoryBreakdown(user.id, "EXPENSE", {
+      from: new Date("2026-09-01"),
+      to: new Date("2026-09-30"),
+    });
+
+    expect(breakdown).toEqual([{ categoryId: electronics.id, categoryName: "Electronics", amount: "3450.00" }]);
+  });
+
   it("returns an empty array, not an error, for a range with no matching transactions", async () => {
     const user = await createTestUser();
     const breakdown = await AnalyticsService.getCategoryBreakdown(user.id, "EXPENSE", {
@@ -127,6 +148,34 @@ describe("AnalyticsService.getMonthlyTrend", () => {
       { month: "2026-08", income: "0.00", expense: "0.00" },
       { month: "2026-09", income: "0.00", expense: "50000.00" },
     ]);
+  });
+
+  it("includes VAT in a month's expense total", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "100.00",
+      vatAmount: "15.00",
+      transactionDate: new Date("2026-09-05"),
+    });
+    await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "300.00",
+      vatAmount: "0.00",
+      transactionDate: new Date("2026-09-06"),
+    });
+
+    const trend = await AnalyticsService.getMonthlyTrend(user.id, {
+      from: new Date("2026-09-01"),
+      to: new Date("2026-09-30"),
+    });
+
+    expect(trend).toEqual([{ month: "2026-09", income: "0.00", expense: "415.00" }]);
   });
 
   it("scopes to the requesting user only", async () => {
