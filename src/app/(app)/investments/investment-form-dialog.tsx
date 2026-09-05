@@ -207,6 +207,7 @@ function CreateInvestmentForm({ accounts, onSuccess }: { accounts: DialogAccount
                   id={field.name}
                   name={field.name}
                   type="date"
+                  max={today()}
                   value={field.state.value}
                   onBlur={() => handleFieldBlur(field)}
                   onChange={(e) => field.handleChange(e.target.value)}

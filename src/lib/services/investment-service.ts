@@ -1,7 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { getOwnedAccountOrThrow } from "@/lib/services/account-service";
+import { assertChronologicalBalanceNonNegative, getOwnedAccountOrThrow } from "@/lib/services/account-service";
 import type {
   ContributeInvestmentInput,
   CreateInvestmentInput,
@@ -121,6 +121,7 @@ export const InvestmentService = {
             transactionDate: input.startDate,
           },
         });
+        await assertChronologicalBalanceNonNegative(tx, userId, input.accountId);
       }
 
       return investment;
@@ -158,6 +159,8 @@ export const InvestmentService = {
           description: input.description,
         },
       });
+
+      await assertChronologicalBalanceNonNegative(tx, userId, input.accountId);
 
       if (investment.status === "PLANNED") {
         await tx.investment.update({ where: { id: investment.id }, data: { status: "ACTIVE" } });

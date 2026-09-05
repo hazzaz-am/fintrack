@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { AppError } from "@/lib/errors";
 import { AccountService } from "@/lib/services/account-service";
 import { TransactionService } from "@/lib/services/transaction-service";
-import { createTestAccount, createTestCategory, createTestUser } from "./fixtures";
+import { createTestAccount, createTestCategory, createTestInvestment, createTestUser } from "./fixtures";
+import { InvestmentService } from "@/lib/services/investment-service";
 
 describe("TransactionService", () => {
   it("rejects a transfer to the same account", async () => {
@@ -112,7 +113,7 @@ describe("TransactionService", () => {
 
   it("reflects an edit or delete in both balance and summary immediately", async () => {
     const user = await createTestUser();
-    const account = await createTestAccount(user.id, "0.00");
+    const account = await createTestAccount(user.id, "10000.00");
     const category = await createTestCategory(user.id, "EXPENSE", "Home");
 
     const transaction = await TransactionService.recordExpense(user.id, {
@@ -128,7 +129,7 @@ describe("TransactionService", () => {
       to: new Date("2026-09-30"),
     });
     expect(summary.expense).toBe("4000.00");
-    expect(await AccountService.getBalance(user.id, account.id)).toBe("-4000.00");
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("6000.00");
 
     await TransactionService.delete(user.id, transaction.id);
     summary = await TransactionService.getSummary(user.id, {
@@ -136,7 +137,7 @@ describe("TransactionService", () => {
       to: new Date("2026-09-30"),
     });
     expect(summary.expense).toBe("0.00");
-    expect(await AccountService.getBalance(user.id, account.id)).toBe("0.00");
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("10000.00");
   });
 
   it("allows editing and clearing a VAT amount on an expense", async () => {
@@ -177,7 +178,7 @@ describe("TransactionService", () => {
 
   it("filters transactions by transactionDate, not createdAt", async () => {
     const user = await createTestUser();
-    const account = await createTestAccount(user.id, "0.00");
+    const account = await createTestAccount(user.id, "1000.00");
     const category = await createTestCategory(user.id, "EXPENSE", "Home");
 
     await TransactionService.recordExpense(user.id, {
@@ -190,7 +191,7 @@ describe("TransactionService", () => {
       accountId: account.id,
       categoryId: category.id,
       amount: "200.00",
-      transactionDate: new Date("2026-09-15"),
+      transactionDate: new Date("2026-09-03"),
     });
 
     const results = await TransactionService.list(user.id, {
@@ -206,7 +207,7 @@ describe("TransactionService", () => {
 describe("TransactionService.listPaginated", () => {
   it("searches by description", async () => {
     const user = await createTestUser();
-    const account = await createTestAccount(user.id, "0.00");
+    const account = await createTestAccount(user.id, "1000.00");
     const category = await createTestCategory(user.id, "EXPENSE", "Home");
 
     await TransactionService.recordExpense(user.id, {
@@ -232,7 +233,7 @@ describe("TransactionService.listPaginated", () => {
 
   it("sorts by amount", async () => {
     const user = await createTestUser();
-    const account = await createTestAccount(user.id, "0.00");
+    const account = await createTestAccount(user.id, "1000.00");
     const category = await createTestCategory(user.id, "EXPENSE", "Home");
 
     await TransactionService.recordExpense(user.id, {
@@ -254,7 +255,7 @@ describe("TransactionService.listPaginated", () => {
 
   it("paginates results and reports the total across all pages", async () => {
     const user = await createTestUser();
-    const account = await createTestAccount(user.id, "0.00");
+    const account = await createTestAccount(user.id, "1000.00");
     const category = await createTestCategory(user.id, "EXPENSE", "Home");
 
     for (let i = 0; i < 5; i += 1) {
@@ -276,7 +277,7 @@ describe("TransactionService.listPaginated", () => {
 
   it("includes related account and category names", async () => {
     const user = await createTestUser();
-    const account = await createTestAccount(user.id, "0.00");
+    const account = await createTestAccount(user.id, "1000.00");
     const category = await createTestCategory(user.id, "EXPENSE", "Home");
 
     await TransactionService.recordExpense(user.id, {
@@ -289,5 +290,102 @@ describe("TransactionService.listPaginated", () => {
     const result = await TransactionService.listPaginated(user.id, {});
     expect(result.items[0].accountName).toBe("Test Account");
     expect(result.items[0].categoryName).toBe("Home");
+  });
+});
+
+describe("TransactionService — insufficient-balance guard", () => {
+  it("rejects a transfer that would exceed the source account's balance, leaving neither account changed", async () => {
+    const user = await createTestUser();
+    const source = await createTestAccount(user.id, "5000.00");
+    const destination = await createTestAccount(user.id, "0.00");
+
+    await expect(
+      TransactionService.recordTransfer(user.id, {
+        sourceAccountId: source.id,
+        destinationAccountId: destination.id,
+        amount: "50000.00",
+        transactionDate: new Date("2026-09-01"),
+      })
+    ).rejects.toThrow(AppError);
+
+    expect(await AccountService.getBalance(user.id, source.id)).toBe("5000.00");
+    expect(await AccountService.getBalance(user.id, destination.id)).toBe("0.00");
+  });
+
+  it("rejects an edit that increases an expense beyond what the account can support", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "5000.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    const transaction = await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "4000.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+
+    await expect(
+      TransactionService.update(user.id, transaction.id, { amount: "50000.00" })
+    ).rejects.toThrow(AppError);
+
+    const unchanged = await TransactionService.list(user.id, {});
+    expect(unchanged.find((t) => t.id === transaction.id)?.amount.toString()).toBe("4000");
+  });
+
+  it("rejects deleting an income transaction whose removal would dip the account negative", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const incomeCategory = await createTestCategory(user.id, "INCOME", "Salary");
+    const expenseCategory = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    const income = await TransactionService.recordIncome(user.id, {
+      accountId: account.id,
+      categoryId: incomeCategory.id,
+      amount: "50000.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+    await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: expenseCategory.id,
+      amount: "40000.00",
+      transactionDate: new Date("2026-09-02"),
+    });
+
+    await expect(TransactionService.delete(user.id, income.id)).rejects.toThrow(AppError);
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("10000.00");
+  });
+
+  it("never blocks deleting an outflow transaction on balance grounds", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "1000.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    const expense = await TransactionService.recordExpense(user.id, {
+      accountId: account.id,
+      categoryId: category.id,
+      amount: "1000.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+
+    await expect(TransactionService.delete(user.id, expense.id)).resolves.not.toThrow();
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("1000.00");
+  });
+
+  it("rejects an investment contribution that would exceed the funding account's balance", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "5000.00");
+    const investment = await createTestInvestment(user.id, "0.00");
+
+    await expect(
+      InvestmentService.contribute(user.id, {
+        investmentId: investment.id,
+        accountId: account.id,
+        amount: "50000.00",
+        transactionDate: new Date("2026-09-01"),
+      })
+    ).rejects.toThrow(AppError);
+
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("5000.00");
+    expect(await InvestmentService.getPrincipal(user.id, investment.id)).toBe("0.00");
   });
 });

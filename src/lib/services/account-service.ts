@@ -3,6 +3,95 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { CreateAccountInput, UpdateAccountInput } from "@/lib/validation/account";
 
+const { Decimal } = Prisma;
+
+interface ChronologicalRow {
+  id: string;
+  type: string;
+  amount: Prisma.Decimal;
+  vatAmount: Prisma.Decimal | null;
+  transactionDate: Date;
+  createdAt: Date;
+  accountId: string | null;
+  sourceAccountId: string | null;
+  destinationAccountId: string | null;
+}
+
+// Signed effect of one transaction row on a specific account's balance,
+// matching the sign conventions in computeBalances above. Transfers apply to
+// both accounts at once but with opposite roles (source pays VAT, dest
+// doesn't) — the caller always asks about one account, so only that
+// account's side of a transfer contributes.
+function effectOn(accountId: string, row: ChronologicalRow): Prisma.Decimal {
+  switch (row.type) {
+    case "INCOME":
+      return row.accountId === accountId ? row.amount : new Decimal(0);
+    case "EXPENSE":
+      return row.accountId === accountId ? row.amount.plus(row.vatAmount ?? 0).negated() : new Decimal(0);
+    case "TRANSFER":
+      if (row.destinationAccountId === accountId) return row.amount;
+      if (row.sourceAccountId === accountId) return row.amount.plus(row.vatAmount ?? 0).negated();
+      return new Decimal(0);
+    case "INVESTMENT_CONTRIBUTION":
+      return row.accountId === accountId ? row.amount.negated() : new Decimal(0);
+    case "INVESTMENT_RETURN":
+      return row.accountId === accountId ? row.amount : new Decimal(0);
+    default:
+      return new Decimal(0);
+  }
+}
+
+// Replays openingBalance forward through every transaction affecting this
+// account, ordered chronologically (transactionDate, then createdAt, then id
+// as a deterministic same-day tiebreak), and rejects if the running balance
+// would go negative at ANY point in that sequence — not merely at the end
+// (design.md D1: a final-total check alone can be fooled by a backdated
+// insert or a future-dated inflow). Must be called after the write it's
+// guarding, inside the same `tx` — throwing here rolls back that whole
+// transaction, so create/update/delete all reuse this one check uniformly
+// against whatever the DB now actually contains.
+export async function assertChronologicalBalanceNonNegative(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  accountId: string
+): Promise<void> {
+  const account = await tx.account.findUnique({ where: { id: accountId } });
+  if (!account || account.userId !== userId) {
+    throw new AppError("NOT_FOUND", "Account not found.");
+  }
+
+  const rows = await tx.transaction.findMany({
+    where: {
+      userId,
+      OR: [{ accountId }, { sourceAccountId: accountId }, { destinationAccountId: accountId }],
+    },
+    orderBy: [{ transactionDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      type: true,
+      amount: true,
+      vatAmount: true,
+      transactionDate: true,
+      createdAt: true,
+      accountId: true,
+      sourceAccountId: true,
+      destinationAccountId: true,
+    },
+  });
+
+  let running = new Decimal(account.openingBalance);
+  for (const row of rows) {
+    running = running.plus(effectOn(accountId, row));
+    if (running.isNegative()) {
+      throw new AppError(
+        "INSUFFICIENT_BALANCE",
+        `This account's balance would go negative on ${row.transactionDate.toISOString().slice(0, 10)}.`,
+        { accountId, violatingDate: row.transactionDate.toISOString(), runningBalance: running.toFixed(2) }
+      );
+    }
+  }
+}
+
 export interface AccountWithBalance {
   id: string;
   userId: string;

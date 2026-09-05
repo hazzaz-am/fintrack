@@ -19,9 +19,16 @@ import { deleteTransactionAction } from "./actions";
 export function DeleteTransactionDialog({ transactionId, label }: { transactionId: string; label: string }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | undefined>(undefined);
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setError(undefined);
+      }}
+    >
       <AlertDialogTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Delete ${label}`} />}>
         <Trash2 />
       </AlertDialogTrigger>
@@ -32,6 +39,11 @@ export function DeleteTransactionDialog({ transactionId, label }: { transactionI
             This can&apos;t be undone. Any account balance or period total it contributed to will update immediately.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {error ? (
+          <p role="alert" className="text-sm font-medium text-destructive">
+            {error}
+          </p>
+        ) : null}
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
@@ -39,7 +51,11 @@ export function DeleteTransactionDialog({ transactionId, label }: { transactionI
             className="bg-destructive/10 text-destructive hover:bg-destructive/20"
             onClick={() => {
               startTransition(async () => {
-                await deleteTransactionAction(transactionId);
+                const state = await deleteTransactionAction(transactionId);
+                if (state.error) {
+                  setError(state.error);
+                  return;
+                }
                 setOpen(false);
               });
             }}

@@ -1,7 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { getOwnedAccountOrThrow } from "@/lib/services/account-service";
+import { assertChronologicalBalanceNonNegative, getOwnedAccountOrThrow } from "@/lib/services/account-service";
 import { CategoryService } from "@/lib/services/category-service";
 import type {
   DateRangeFilterInput,
@@ -49,18 +49,27 @@ async function recordIncomeOrExpense(
   await getOwnedAccountOrThrow(userId, input.accountId);
   await CategoryService.getOwnedOfType(userId, input.categoryId, type);
 
-  return prisma.transaction.create({
-    data: {
-      userId,
-      accountId: input.accountId,
-      categoryId: input.categoryId,
-      type,
-      amount: input.amount,
-      // VAT only applies to expenses — it's ignored for income even if sent.
-      vatAmount: type === "EXPENSE" ? input.vatAmount : undefined,
-      transactionDate: input.transactionDate,
-      description: input.description,
-    },
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.transaction.create({
+      data: {
+        userId,
+        accountId: input.accountId,
+        categoryId: input.categoryId,
+        type,
+        amount: input.amount,
+        // VAT only applies to expenses — it's ignored for income even if sent.
+        vatAmount: type === "EXPENSE" ? input.vatAmount : undefined,
+        transactionDate: input.transactionDate,
+        description: input.description,
+      },
+    });
+
+    // Only EXPENSE can drive the account negative — INCOME only ever raises it.
+    if (type === "EXPENSE") {
+      await assertChronologicalBalanceNonNegative(tx, userId, input.accountId);
+    }
+
+    return created;
   });
 }
 
@@ -90,7 +99,7 @@ export const TransactionService = {
         throw new AppError("NOT_FOUND", "Destination account not found.");
       }
 
-      return tx.transaction.create({
+      const created = await tx.transaction.create({
         data: {
           userId,
           type: "TRANSFER",
@@ -102,6 +111,12 @@ export const TransactionService = {
           description: input.description,
         },
       });
+
+      // Only the source account can go negative from a new transfer — the
+      // destination side only ever gains.
+      await assertChronologicalBalanceNonNegative(tx, userId, input.sourceAccountId);
+
+      return created;
     });
   },
 
@@ -119,21 +134,53 @@ export const TransactionService = {
       throw new AppError("VALIDATION_ERROR", "Income transactions cannot have VAT.");
     }
 
-    return prisma.transaction.update({
-      where: { id: transactionId },
-      data: {
-        categoryId: input.categoryId,
-        amount: input.amount,
-        vatAmount: input.vatAmount,
-        transactionDate: input.transactionDate,
-        description: input.description,
-      },
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.transaction.update({
+        where: { id: transactionId },
+        data: {
+          categoryId: input.categoryId,
+          amount: input.amount,
+          vatAmount: input.vatAmount,
+          transactionDate: input.transactionDate,
+          description: input.description,
+        },
+      });
+
+      // `updateTransactionSchema` never changes which account(s) a transaction
+      // belongs to, only amount/vatAmount/transactionDate/categoryId — but an
+      // edit can move the balance (or its chronological position) in either
+      // direction, so every account this transaction touches is always
+      // re-checked unconditionally, rather than trying to classify which
+      // edits are risk-free (design.md D3).
+      if (existing.type === "TRANSFER") {
+        if (existing.sourceAccountId) await assertChronologicalBalanceNonNegative(tx, userId, existing.sourceAccountId);
+        if (existing.destinationAccountId) {
+          await assertChronologicalBalanceNonNegative(tx, userId, existing.destinationAccountId);
+        }
+      } else if (existing.accountId) {
+        await assertChronologicalBalanceNonNegative(tx, userId, existing.accountId);
+      }
+
+      return updated;
     });
   },
 
   async delete(userId: string, transactionId: string) {
-    await getOwnedTransactionOrThrow(userId, transactionId);
-    await prisma.transaction.delete({ where: { id: transactionId } });
+    const existing = await getOwnedTransactionOrThrow(userId, transactionId);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.delete({ where: { id: transactionId } });
+
+      // Removing an outflow (EXPENSE, transfer-out, INVESTMENT_CONTRIBUTION)
+      // only ever raises a balance, so it never needs checking. Removing an
+      // inflow (INCOME, transfer-in, INVESTMENT_RETURN) can uncover a
+      // downstream dip if later transactions already relied on that money.
+      if (existing.type === "INCOME" || existing.type === "INVESTMENT_RETURN") {
+        if (existing.accountId) await assertChronologicalBalanceNonNegative(tx, userId, existing.accountId);
+      } else if (existing.type === "TRANSFER" && existing.destinationAccountId) {
+        await assertChronologicalBalanceNonNegative(tx, userId, existing.destinationAccountId);
+      }
+    });
   },
 
   async list(userId: string, filter: DateRangeFilterInput) {

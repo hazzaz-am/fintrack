@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { zMoney, zPositiveMoney } from "./money";
+import { zPastOrPresentDate } from "./date";
 
 export const investmentTypeSchema = z.enum([
   "FDR",
@@ -21,7 +22,7 @@ export const createInvestmentSchema = z.object({
   type: investmentTypeSchema,
   institution: z.string().trim().max(120).optional(),
   openingPrincipal: zMoney.default("0.00"),
-  startDate: z.coerce.date(),
+  startDate: zPastOrPresentDate,
   maturityDate: z.coerce.date().optional(),
   expectedReturnAmount: zMoney.optional(),
   expectedReturnRate: z.coerce.number().min(0).max(100).optional(),
@@ -55,7 +56,7 @@ export const contributeInvestmentSchema = z.object({
   investmentId: z.string().cuid(),
   accountId: z.string().cuid(),
   amount: zPositiveMoney,
-  transactionDate: z.coerce.date(),
+  transactionDate: zPastOrPresentDate,
   description: z.string().trim().max(300).optional(),
 });
 
@@ -64,7 +65,7 @@ export const recordMaturityOrWithdrawalSchema = z.object({
   accountId: z.string().cuid(),
   principalAmount: zPositiveMoney,
   profitAmount: zPositiveMoney.optional(),
-  transactionDate: z.coerce.date(),
+  transactionDate: zPastOrPresentDate,
   newStatus: z.enum(["MATURED", "WITHDRAWN"]),
   description: z.string().trim().max(300).optional(),
 });

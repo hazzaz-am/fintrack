@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AppError } from "@/lib/errors";
 import { AccountService } from "@/lib/services/account-service";
 import { InvestmentService } from "@/lib/services/investment-service";
 import { TransactionService } from "@/lib/services/transaction-service";
@@ -54,7 +55,7 @@ describe("AccountService — derived balance", () => {
 
   it("reflects an edited transaction amount immediately, with no separate reconciliation step", async () => {
     const user = await createTestUser();
-    const account = await createTestAccount(user.id, "0.00");
+    const account = await createTestAccount(user.id, "10000.00");
     const category = await createTestCategory(user.id, "EXPENSE", "Home");
 
     const transaction = await TransactionService.recordExpense(user.id, {
@@ -64,11 +65,11 @@ describe("AccountService — derived balance", () => {
       transactionDate: new Date("2026-09-01"),
     });
 
-    expect(await AccountService.getBalance(user.id, account.id)).toBe("-5000.00");
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("5000.00");
 
     await TransactionService.update(user.id, transaction.id, { amount: "4000.00" });
 
-    expect(await AccountService.getBalance(user.id, account.id)).toBe("-4000.00");
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("6000.00");
   });
 
   it("deducts VAT from the account paying an expense, matching the VAT-inclusive expense total", async () => {
@@ -190,5 +191,107 @@ describe("AccountService — derived balance", () => {
     });
 
     expect(await AccountService.getBalance(user.id, account.id)).toBe("30000.00");
+  });
+});
+
+describe("AccountService — chronological balance guard", () => {
+  it("allows an expense that stays within the account's balance", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "10000.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    await expect(
+      TransactionService.recordExpense(user.id, {
+        accountId: account.id,
+        categoryId: category.id,
+        amount: "5000.00",
+        transactionDate: new Date("2026-09-01"),
+      })
+    ).resolves.not.toThrow();
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("5000.00");
+  });
+
+  it("rejects an expense that would exceed the account's current balance", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "5000.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    await expect(
+      TransactionService.recordExpense(user.id, {
+        accountId: account.id,
+        categoryId: category.id,
+        amount: "50000.00",
+        transactionDate: new Date("2026-09-01"),
+      })
+    ).rejects.toThrow(AppError);
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("5000.00");
+  });
+
+  it("rejects a backdated expense that dips the balance negative at that point in time, even though the final total stays positive", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const expenseCategory = await createTestCategory(user.id, "EXPENSE", "Home");
+    const incomeCategory = await createTestCategory(user.id, "INCOME", "Salary");
+
+    // Funds the account, dated AFTER the backdated expense attempted below.
+    await TransactionService.recordIncome(user.id, {
+      accountId: account.id,
+      categoryId: incomeCategory.id,
+      amount: "10000.00",
+      transactionDate: new Date("2026-09-05"),
+    });
+
+    // 10000 (income) - 8000 (expense) = 2000 is positive overall, but the
+    // expense is dated BEFORE the income, so chronologically the account
+    // would sit at -8000 on 2026-09-01.
+    await expect(
+      TransactionService.recordExpense(user.id, {
+        accountId: account.id,
+        categoryId: expenseCategory.id,
+        amount: "8000.00",
+        transactionDate: new Date("2026-09-01"),
+      })
+    ).rejects.toThrow(AppError);
+  });
+
+  it("orders same-day transactions by creation order for the chronological walk", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "0.00");
+    const expenseCategory = await createTestCategory(user.id, "EXPENSE", "Home");
+    const incomeCategory = await createTestCategory(user.id, "INCOME", "Salary");
+
+    // Recorded first, same day — its createdAt puts it earlier in the walk,
+    // funding the account before the expense below is evaluated.
+    await TransactionService.recordIncome(user.id, {
+      accountId: account.id,
+      categoryId: incomeCategory.id,
+      amount: "5000.00",
+      transactionDate: new Date("2026-09-01"),
+    });
+
+    await expect(
+      TransactionService.recordExpense(user.id, {
+        accountId: account.id,
+        categoryId: expenseCategory.id,
+        amount: "5000.00",
+        transactionDate: new Date("2026-09-01"),
+      })
+    ).resolves.not.toThrow();
+  });
+
+  it("counts VAT as part of the outflow when checking balance sufficiency", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "4800.00");
+    const category = await createTestCategory(user.id, "EXPENSE", "Home");
+
+    await expect(
+      TransactionService.recordExpense(user.id, {
+        accountId: account.id,
+        categoryId: category.id,
+        amount: "4500.00",
+        vatAmount: "500.00",
+        transactionDate: new Date("2026-09-01"),
+      })
+    ).rejects.toThrow(AppError);
   });
 });

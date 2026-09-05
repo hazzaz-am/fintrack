@@ -123,8 +123,18 @@ export async function updateTransactionAction(
   }
 }
 
-export async function deleteTransactionAction(transactionId: string): Promise<void> {
-  const userId = await requireAuth();
-  await TransactionService.delete(userId, transactionId);
-  revalidateAllTransactionPaths();
+export interface DeleteTransactionActionState {
+  error?: string;
+}
+
+export async function deleteTransactionAction(transactionId: string): Promise<DeleteTransactionActionState> {
+  try {
+    const userId = await requireAuth();
+    await TransactionService.delete(userId, transactionId);
+    revalidateAllTransactionPaths();
+    return {};
+  } catch (error) {
+    if (error instanceof AppError) return { error: error.message };
+    throw error;
+  }
 }

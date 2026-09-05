@@ -257,6 +257,7 @@ function IncomeOrExpenseForm({
                   id={field.name}
                   name={field.name}
                   type="date"
+                  max={today()}
                   value={field.state.value}
                   onBlur={() => handleFieldBlur(field)}
                   onChange={(e) => field.handleChange(e.target.value)}
@@ -430,6 +431,7 @@ function TransferForm({
                   id={field.name}
                   name={field.name}
                   type="date"
+                  max={today()}
                   value={field.state.value}
                   onBlur={() => handleFieldBlur(field)}
                   onChange={(e) => field.handleChange(e.target.value)}

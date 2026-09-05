@@ -6,7 +6,7 @@ import { createTestAccount, createTestCategory, createTestUser } from "./fixture
 describe("AnalyticsService.getCategoryBreakdown", () => {
   it("groups expenses by category for a date range", async () => {
     const user = await createTestUser();
-    const account = await createTestAccount(user.id, "0.00");
+    const account = await createTestAccount(user.id, "100000.00");
     const home = await createTestCategory(user.id, "EXPENSE", "Home");
     const food = await createTestCategory(user.id, "EXPENSE", "Food");
 
@@ -42,7 +42,7 @@ describe("AnalyticsService.getCategoryBreakdown", () => {
 
   it("includes VAT in a category's total", async () => {
     const user = await createTestUser();
-    const account = await createTestAccount(user.id, "0.00");
+    const account = await createTestAccount(user.id, "10000.00");
     const electronics = await createTestCategory(user.id, "EXPENSE", "Electronics");
 
     await TransactionService.recordExpense(user.id, {
@@ -92,9 +92,9 @@ describe("AnalyticsService.getCategoryBreakdown", () => {
   it("scopes to the requesting user only", async () => {
     const userA = await createTestUser();
     const userB = await createTestUser();
-    const accountA = await createTestAccount(userA.id, "0.00");
+    const accountA = await createTestAccount(userA.id, "1000.00");
     const categoryA = await createTestCategory(userA.id, "EXPENSE", "Home");
-    const accountB = await createTestAccount(userB.id, "0.00");
+    const accountB = await createTestAccount(userB.id, "1000000.00");
     const categoryB = await createTestCategory(userB.id, "EXPENSE", "Home");
 
     await TransactionService.recordExpense(userA.id, {
@@ -152,7 +152,7 @@ describe("AnalyticsService.getMonthlyTrend", () => {
 
   it("includes VAT in a month's expense total", async () => {
     const user = await createTestUser();
-    const account = await createTestAccount(user.id, "0.00");
+    const account = await createTestAccount(user.id, "10000.00");
     const category = await createTestCategory(user.id, "EXPENSE", "Home");
 
     await TransactionService.recordExpense(user.id, {

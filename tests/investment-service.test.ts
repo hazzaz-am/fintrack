@@ -4,6 +4,44 @@ import { AccountService } from "@/lib/services/account-service";
 import { InvestmentService } from "@/lib/services/investment-service";
 import { createTestAccount, createTestInvestment, createTestUser } from "./fixtures";
 
+describe("InvestmentService — insufficient-balance guard", () => {
+  it("rejects a contribution that would exceed the funding account's balance, leaving the investment unaffected", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "5000.00");
+    const investment = await createTestInvestment(user.id, "0.00");
+
+    await expect(
+      InvestmentService.contribute(user.id, {
+        investmentId: investment.id,
+        accountId: account.id,
+        amount: "50000.00",
+        transactionDate: new Date("2026-09-01"),
+      })
+    ).rejects.toThrow(AppError);
+
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("5000.00");
+    expect(await InvestmentService.getPrincipal(user.id, investment.id)).toBe("0.00");
+  });
+
+  it("rejects creating an investment with an initial contribution that exceeds the funding account's balance", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "5000.00");
+
+    await expect(
+      InvestmentService.createWithInitialContribution(user.id, {
+        name: "BRAC Bank FDR",
+        type: "FDR",
+        openingPrincipal: "0.00",
+        startDate: new Date("2026-09-01"),
+        accountId: account.id,
+        contributionAmount: "50000.00",
+      })
+    ).rejects.toThrow(AppError);
+
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("5000.00");
+  });
+});
+
 describe("InvestmentService", () => {
   it("derives principal from openingPrincipal alone when there is no ledger history", async () => {
     const user = await createTestUser();

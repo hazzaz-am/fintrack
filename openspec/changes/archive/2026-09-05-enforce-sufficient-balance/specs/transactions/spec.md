@@ -1,17 +1,4 @@
-# transactions Specification
-
-## Purpose
-
-Income/Expense/Transfer CRUD, transfer atomicity, date-range filtering, and monthly aggregation.
-
-## Requirements
-
-### Requirement: Record Income Transaction
-The system SHALL allow a user to record an income transaction against one of their accounts, with an amount, date, income category, and optional description.
-
-#### Scenario: Record salary income
-- **WHEN** a user records an income transaction of ৳80,000 on their BRAC Bank account with category "Salary"
-- **THEN** the system creates the transaction, and the account's computed balance and the period's total income both increase by ৳80,000
+## MODIFIED Requirements
 
 ### Requirement: Record Expense Transaction
 The system SHALL allow a user to record an expense transaction against one of their accounts, with an amount, date, expense category, and optional description. The system SHALL reject the transaction if recording it would cause the account's chronologically-ordered running balance (replaying `openingBalance` forward through all of the account's transactions in `transactionDate`, then `createdAt`, then `id` order) to go negative at any point, counting the expense's `amount` plus any `vatAmount` as the amount deducted.
@@ -55,7 +42,7 @@ The system SHALL allow a user to edit or delete their own transactions, with all
 - **THEN** the account's computed balance and the period's expense total both reflect the new ৳4,000 amount on the next read
 
 #### Scenario: Delete transaction
-- **WHEN** a user deletes a transaction
+- **WHEN** a user deletes an expense transaction
 - **THEN** the transaction no longer contributes to any account balance or period total
 
 #### Scenario: Edit rejected for insufficient balance
@@ -69,6 +56,8 @@ The system SHALL allow a user to edit or delete their own transactions, with all
 #### Scenario: Delete of outflow never rejected on balance grounds
 - **WHEN** a user deletes an `EXPENSE`, transfer-out, or `INVESTMENT_CONTRIBUTION` transaction
 - **THEN** the system does not perform a balance-sufficiency check for the deletion, since removing an outflow can only raise the account's balance at every point in its history
+
+## ADDED Requirements
 
 ### Requirement: Transaction Date Bound
 The system SHALL reject any `INCOME`, `EXPENSE`, or `TRANSFER` transaction whose `transactionDate` is later than the current date, both when creating and when editing a transaction.
@@ -84,43 +73,3 @@ The system SHALL reject any `INCOME`, `EXPENSE`, or `TRANSFER` transaction whose
 #### Scenario: Backdated transaction still allowed
 - **WHEN** a user records an expense with a `transactionDate` in the past
 - **THEN** the system accepts the date (subject to the balance-sufficiency requirements above)
-
-### Requirement: Filter Transactions by Date Range
-The system SHALL allow a user to filter their transactions by day, week, month, year, or a custom date range, using the transaction's `transactionDate`, not its `createdAt` record-creation timestamp.
-
-#### Scenario: Filter by custom range
-- **WHEN** a user filters transactions between two dates
-- **THEN** the system returns only transactions whose `transactionDate` falls within that range, regardless of when the record was created
-
-### Requirement: Monthly Aggregation
-The system SHALL compute total income, total expenses, and net cash flow for a given period using database aggregation over transactions, not by loading all transactions into the application and summing them there. The total expenses figure SHALL include any `vatAmount` recorded against `EXPENSE` transactions in the period, so it reflects the full amount deducted from the paying account.
-
-#### Scenario: Monthly summary
-- **WHEN** a user requests their September 2026 summary
-- **THEN** the system returns total income, total expenses, and net cash flow computed via a database aggregate query scoped to that date range and that user
-
-#### Scenario: Expense total includes VAT
-- **WHEN** a user's September 2026 expenses include a ৳100 transaction with ৳15 of VAT
-- **THEN** the period's total expenses figure includes both the ৳100 and the ৳15, and net cash flow (income − expenses) reflects the same ৳115
-
-#### Scenario: Expense without VAT is unaffected
-- **WHEN** a user's expense transaction has no `vatAmount` recorded
-- **THEN** it contributes only its `amount` to the period's total expenses, exactly as before this change
-
-### Requirement: Record Investment Contribution Transaction
-The system SHALL support an `INVESTMENT_CONTRIBUTION` transaction type carrying an `accountId` and an `investmentId`, no `categoryId`, and no `sourceAccountId`/`destinationAccountId`. The system SHALL NOT count `INVESTMENT_CONTRIBUTION` transactions as income or expense.
-
-#### Scenario: Investment contribution recorded
-- **WHEN** the system records an `INVESTMENT_CONTRIBUTION` of ৳200,000 against BRAC Bank and a given investment
-- **THEN** the transaction is created with `accountId` and `investmentId` set, no category, and it does not contribute to the period's income or expense totals
-
-### Requirement: Record Investment Return Transaction
-The system SHALL support an `INVESTMENT_RETURN` transaction type carrying an `accountId` and an `investmentId`, no `categoryId`, and no `sourceAccountId`/`destinationAccountId`, representing only the principal portion of an investment payout. The system SHALL NOT count `INVESTMENT_RETURN` transactions as income or expense.
-
-#### Scenario: Investment return recorded
-- **WHEN** the system records an `INVESTMENT_RETURN` of ৳200,000 against BRAC Bank and a given investment
-- **THEN** the transaction is created with `accountId` and `investmentId` set, no category, and it does not contribute to the period's income or expense totals
-
-#### Scenario: Profit is a separate income transaction
-- **WHEN** an investment payout includes profit above principal
-- **THEN** the system records that profit as a separate ordinary `INCOME` transaction under the "Investment Return" category, distinct from the `INVESTMENT_RETURN` transaction
