@@ -58,6 +58,12 @@ export async function createTestRecurringTransaction(
   });
 }
 
+export async function createTestBorrower(userId: string, name = "Test Borrower") {
+  return prisma.borrower.create({
+    data: { userId, name },
+  });
+}
+
 export async function createTestInvestment(userId: string, openingPrincipal = "0.00") {
   return prisma.investment.create({
     data: {

@@ -54,6 +54,10 @@ function effectOn(accountId: string, row: ChronologicalRow): Prisma.Decimal {
       return row.accountId === accountId ? row.amount.negated() : new Decimal(0);
     case "INVESTMENT_RETURN":
       return row.accountId === accountId ? row.amount : new Decimal(0);
+    case "LOAN_DISBURSEMENT":
+      return row.accountId === accountId ? row.amount.negated() : new Decimal(0);
+    case "LOAN_REPAYMENT":
+      return row.accountId === accountId ? row.amount : new Decimal(0);
     default:
       return new Decimal(0);
   }
@@ -145,12 +149,14 @@ export interface AccountWithBalance {
 // Computes every account's balance in a single aggregation pass:
 //   balance = openingBalance + income - expense + transfers in - transfers out
 //           - investment contributions + investment returns
+//           - loan disbursements + loan repayments
 //           - VAT on expenses - VAT on transfers out (source account only)
-// (design.md D1, D6). No N+1 query per account. Investment contributions and
-// returns are excluded from income/expense the same way transfers are — see
-// TransactionService/InvestmentService. VAT is a fixed amount deducted from
-// the paying/source account in addition to `amount`, but is never part of
-// `amount` itself, so it doesn't affect category totals or getSummary.
+// (design.md D1, D6; add-borrower-tracking design.md D8). No N+1 query per
+// account. Investment/loan transaction types are excluded from income/expense
+// the same way transfers are — see TransactionService/InvestmentService/
+// BorrowerService. VAT is a fixed amount deducted from the paying/source
+// account in addition to `amount`, but is never part of `amount` itself, so
+// it doesn't affect category totals or getSummary.
 async function computeBalances(userId: string, accountIds?: string[]): Promise<Map<string, string>> {
   const rows = await prisma.$queryRaw<Array<{ accountId: string; balance: string }>>`
     SELECT
@@ -165,6 +171,8 @@ async function computeBalances(userId: string, accountIds?: string[]): Promise<M
         - COALESCE(SUM(CASE WHEN t."type" = 'TRANSFER' AND t."sourceAccountId" = a.id THEN t."vatAmount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
         - COALESCE(SUM(CASE WHEN t."type" = 'INVESTMENT_CONTRIBUTION' AND t."accountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
         + COALESCE(SUM(CASE WHEN t."type" = 'INVESTMENT_RETURN' AND t."accountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
+        - COALESCE(SUM(CASE WHEN t."type" = 'LOAN_DISBURSEMENT' AND t."accountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
+        + COALESCE(SUM(CASE WHEN t."type" = 'LOAN_REPAYMENT' AND t."accountId" = a.id THEN t."amount" ELSE 0::numeric(14,2) END), 0::numeric(14,2))
       )::text AS "balance"
     FROM "accounts" a
     LEFT JOIN "transactions" t

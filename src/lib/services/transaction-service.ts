@@ -164,6 +164,13 @@ export const TransactionService = {
   async update(userId: string, transactionId: string, input: UpdateTransactionInput) {
     const existing = await getOwnedTransactionOrThrow(userId, transactionId);
 
+    // A loan's entire identity depends on its disbursed amount staying fixed
+    // (borrowers spec, "Loan Amount and Source Account Are Immutable") —
+    // unlike every other outflow type, its amount can never be edited.
+    if (existing.type === "LOAN_DISBURSEMENT" && input.amount !== undefined) {
+      throw new AppError("VALIDATION_ERROR", "A loan disbursement's amount cannot be edited.");
+    }
+
     if (input.categoryId) {
       if (existing.type === "TRANSFER") {
         throw new AppError("VALIDATION_ERROR", "Transfers cannot have a category.");
@@ -218,6 +225,14 @@ export const TransactionService = {
 
   async delete(userId: string, transactionId: string) {
     const existing = await getOwnedTransactionOrThrow(userId, transactionId);
+
+    // Never deletable, regardless of the linked loan's status (borrowers
+    // spec, "Loan Amount and Source Account Are Immutable") — the "borrower
+    // must return it" guarantee this feature exists to enforce would break
+    // if the disbursement itself could simply be removed.
+    if (existing.type === "LOAN_DISBURSEMENT") {
+      throw new AppError("VALIDATION_ERROR", "A loan disbursement cannot be deleted.");
+    }
 
     await prisma.$transaction(async (tx) => {
       // Undo any reserved-funds dip this transaction caused before the row

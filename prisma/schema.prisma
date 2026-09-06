@@ -24,6 +24,8 @@ enum TransactionType {
   TRANSFER
   INVESTMENT_CONTRIBUTION
   INVESTMENT_RETURN
+  LOAN_DISBURSEMENT
+  LOAN_REPAYMENT
 }
 
 enum SavingsGoalStatus {
@@ -45,6 +47,13 @@ enum InvestmentStatus {
   MATURED
   WITHDRAWN
   CANCELLED
+}
+
+enum LoanStatus {
+  OPEN
+  PARTIALLY_REPAID
+  REPAID
+  WRITTEN_OFF
 }
 
 enum RecurringTransactionType {
@@ -80,6 +89,8 @@ model User {
   investments             Investment[]
   recurringTransactions   RecurringTransaction[]
   goalReservationPromises GoalReservationPromise[]
+  borrowers               Borrower[]
+  loans                   Loan[]
 
   @@map("users")
 }
@@ -144,6 +155,7 @@ model Transaction {
   sourceAccountId        String?
   destinationAccountId   String?
   investmentId           String?
+  loanId                 String?
   recurringTransactionId String?
   type                   TransactionType
   amount                 Decimal         @db.Decimal(14, 2)
@@ -159,6 +171,7 @@ model Transaction {
   sourceAccount        Account?              @relation("TransactionSourceAccount", fields: [sourceAccountId], references: [id], onDelete: Cascade)
   destinationAccount   Account?              @relation("TransactionDestinationAccount", fields: [destinationAccountId], references: [id], onDelete: Cascade)
   investment           Investment?           @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  loan                 Loan?                 @relation(fields: [loanId], references: [id], onDelete: Cascade)
   recurringTransaction RecurringTransaction? @relation(fields: [recurringTransactionId], references: [id], onDelete: SetNull)
   reservationEvents    GoalAllocationEvent[] @relation("TransactionReservationEvents")
 
@@ -167,6 +180,7 @@ model Transaction {
   @@index([sourceAccountId])
   @@index([destinationAccountId])
   @@index([investmentId])
+  @@index([loanId])
   @@index([recurringTransactionId])
   @@index([userId, transactionDate])
   @@map("transactions")
@@ -279,6 +293,46 @@ model Investment {
 
   @@index([userId])
   @@map("investments")
+}
+
+model Borrower {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  loans Loan[]
+
+  @@index([userId])
+  @@map("borrowers")
+}
+
+// No `amount` or `sourceAccountId` column (design.md D1 revision): both are
+// read off the single LOAN_DISBURSEMENT Transaction this loan is linked to
+// via Transaction.loanId, exactly the way Investment stores no funding
+// account and derives principal from its linked Transaction rows — a Loan
+// simply has exactly one disbursement instead of Investment's many. Repaid
+// amount/outstanding are likewise derived by summing LOAN_REPAYMENT
+// transactions linked the same way, never stored.
+model Loan {
+  id         String     @id @default(cuid())
+  userId     String
+  borrowerId String
+  dueDate    DateTime
+  status     LoanStatus @default(OPEN)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  borrower     Borrower      @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([borrowerId])
+  @@map("loans")
 }
 
 // No stored nextOccurrence (design.md D23): "due" is computed from

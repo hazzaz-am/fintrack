@@ -10,6 +10,7 @@ import {
   ChartColumn,
   Settings,
   Repeat,
+  HandCoins,
 } from "lucide-react";
 
 export interface NavItem {
@@ -28,6 +29,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Expenses", href: "/expenses", icon: TrendingDown, enabled: true },
   { label: "Savings Goals", href: "/savings-goals", icon: PiggyBank, enabled: true },
   { label: "Investments", href: "/investments", icon: LineChart, enabled: true },
+  { label: "Borrowers", href: "/borrowers", icon: HandCoins, enabled: true },
   { label: "Recurring", href: "/recurring-transactions", icon: Repeat, enabled: true },
   { label: "Reports", href: "/reports", icon: ChartColumn, enabled: true },
   { label: "Settings", href: "/settings", icon: Settings, enabled: true },

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 beforeEach(async () => {
   // Fast, order-safe reset between tests: TRUNCATE ... CASCADE handles FKs in one shot.
   await prisma.$executeRawUnsafe(
-    `TRUNCATE TABLE "goal_reservation_promises", "goal_allocation_events", "savings_goals", "recurring_transactions", "transactions", "investments", "categories", "accounts", "users" RESTART IDENTITY CASCADE;`
+    `TRUNCATE TABLE "goal_reservation_promises", "goal_allocation_events", "savings_goals", "recurring_transactions", "transactions", "investments", "loans", "borrowers", "categories", "accounts", "users" RESTART IDENTITY CASCADE;`
   );
 });
 
