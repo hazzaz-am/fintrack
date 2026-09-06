@@ -19,6 +19,8 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { disburseLoanAction } from "./actions";
 import { disburseLoanSchema } from "@/lib/validation/borrower";
 import { useAppForm, handleFieldBlur } from "@/lib/forms/use-app-form";
+import { useReservationGate } from "@/lib/forms/use-reservation-gate";
+import { ReservationConsentWizard } from "@/components/goal-reservation/reservation-consent-wizard";
 import { AppFieldError } from "@/lib/forms/app-field-error";
 import { formatMoney } from "@/components/transactions/transaction-format";
 
@@ -71,7 +73,8 @@ export function LendDialog({
         <DrawerHeader>
           <DrawerTitle>Lend to {borrowerName}</DrawerTitle>
           <DrawerDescription>
-            Only an account&apos;s unallocated balance — what isn&apos;t already reserved for a savings goal — can be lent out.
+            Lending more than an account&apos;s unallocated balance is allowed, but dipping into money a savings goal
+            already has reserved requires confirming which goal(s) it comes from.
           </DrawerDescription>
         </DrawerHeader>
         {/* Remounted on every open (key) so each open starts from fresh field state. */}
@@ -99,34 +102,23 @@ function LendForm({
     description: undefined,
   };
 
-  // `accounts` (with each one's unallocated balance) is a per-render prop the
-  // shared schema can't hardcode, so the cap is added as an instance-level
-  // refine on top of it — same pattern as record-maturity-dialog's
-  // available-principal guard. Reads `data.accountId` at validation time, so
-  // it always checks against whichever account is currently selected.
-  const schema = disburseLoanSchema.superRefine((data, ctx) => {
-    const account = accounts.find((a) => a.id === data.accountId);
-    if (account && Number(data.amount) > Number(account.unallocated)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["amount"],
-        message: `Only ${formatMoney(account.unallocated, account.currency)} is unallocated on this account.`,
-      });
-    }
-  });
-
+  const { gatedAction, reservation, wizardError, isPending, cancel, confirm } = useReservationGate(
+    disburseLoanAction.bind(null, borrowerId)
+  );
   const form = useAppForm({
     defaultValues,
-    schema: schema as unknown as z.ZodType<unknown, DisburseLoanValues>,
-    action: disburseLoanAction.bind(null, borrowerId),
+    schema: disburseLoanSchema as unknown as z.ZodType<unknown, DisburseLoanValues>,
+    action: gatedAction,
     onSuccess: (state) => {
       if (state.success) onSuccess();
     },
   });
   const selectedAccountId = form.state.values.accountId;
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const currency = selectedAccount?.currency ?? accounts[0]?.currency ?? "BDT";
 
   return (
+    <>
     <form
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
       onSubmit={(e) => {
@@ -251,5 +243,18 @@ function LendForm({
         </form.Subscribe>
       </DrawerFooter>
     </form>
+    {reservation && (
+      <ReservationConsentWizard
+        open
+        shortfall={reservation.shortfall}
+        currency={currency}
+        goals={reservation.goals}
+        pending={isPending}
+        error={wizardError}
+        onCancel={cancel}
+        onConfirm={(consent) => confirm(consent, onSuccess)}
+      />
+    )}
+    </>
   );
 }

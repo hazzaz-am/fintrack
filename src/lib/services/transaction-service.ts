@@ -7,7 +7,7 @@ import {
   type ChronologicalPosition,
 } from "@/lib/services/account-service";
 import { CategoryService } from "@/lib/services/category-service";
-import { computeShortfall, applyReservationConsent, reverseForTransaction } from "@/lib/services/goal-reservation-service";
+import { enforceReservationGuard, reverseForTransaction } from "@/lib/services/goal-reservation-service";
 import type { ReservationConsentInput } from "@/lib/validation/goal-reservation";
 import type {
   DateRangeFilterInput,
@@ -16,38 +16,6 @@ import type {
   TransactionSearchInput,
   UpdateTransactionInput,
 } from "@/lib/validation/transaction";
-
-/** Whatever `new Decimal(...)` accepts — Prisma's `Decimal.Value` type isn't reachable through the `Prisma` namespace in this version. */
-type MoneyValue = string | number | Prisma.Decimal;
-
-// Shared by recordExpense/recordTransfer (and InvestmentService.contribute):
-// after the underlying transaction passes the insufficient-balance check,
-// see whether it dips into a goal's reserve on `accountId`, and either
-// require consent (goal-reservation-guard spec) or apply an already-given
-// one. Runs strictly after the balance check — "can't afford it at all" is a
-// harder stop than "can afford it but it's reserved" (design.md D2).
-export async function enforceReservationGuard(
-  tx: Prisma.TransactionClient,
-  userId: string,
-  transactionId: string,
-  accountId: string,
-  amount: MoneyValue,
-  vatAmount: MoneyValue | null | undefined,
-  consent: ReservationConsentInput | undefined
-): Promise<void> {
-  const result = await computeShortfall(userId, accountId, amount, vatAmount ?? 0);
-  if (Number(result.shortfall) <= 0) return;
-
-  if (!consent) {
-    throw new AppError(
-      "RESERVATION_CONSENT_REQUIRED",
-      `This dips ${result.shortfall} into money reserved by a savings goal on this account.`,
-      { shortfall: result.shortfall, unallocated: result.unallocated, goals: result.goals }
-    );
-  }
-
-  await applyReservationConsent(tx, userId, transactionId, accountId, result.shortfall, consent);
-}
 
 export interface TransactionListItem {
   id: string;

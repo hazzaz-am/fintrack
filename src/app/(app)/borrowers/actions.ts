@@ -10,12 +10,16 @@ import {
   recordRepaymentSchema,
   updateLoanDueDateSchema,
 } from "@/lib/validation/borrower";
+import { parseReservationConsent } from "@/lib/validation/goal-reservation";
+import type { ReservationShortfall } from "@/lib/services/goal-reservation-service";
 import { AppError } from "@/lib/errors";
 
 export interface BorrowerActionState {
   error?: string;
   fieldErrors?: Record<string, string[]>;
   success?: boolean;
+  /** Set instead of `error` when this disbursement dips into a goal's reserve and needs the consent wizard (goal-reservation-guard spec). */
+  reservationRequired?: ReservationShortfall;
 }
 
 function revalidateBorrowerPaths() {
@@ -96,11 +100,17 @@ export async function disburseLoanAction(
     if (!parsed.success) {
       return { fieldErrors: parsed.error.flatten().fieldErrors };
     }
-    await BorrowerService.disburseLoan(userId, parsed.data);
+    const consent = parseReservationConsent(formData);
+    await BorrowerService.disburseLoan(userId, parsed.data, consent);
     revalidateBorrowerPaths();
     return { success: true };
   } catch (error) {
-    if (error instanceof AppError) return { error: error.message };
+    if (error instanceof AppError) {
+      if (error.code === "RESERVATION_CONSENT_REQUIRED") {
+        return { reservationRequired: error.details as ReservationShortfall };
+      }
+      return { error: error.message };
+    }
     throw error;
   }
 }

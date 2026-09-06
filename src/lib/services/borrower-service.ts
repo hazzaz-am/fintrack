@@ -1,8 +1,9 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { AccountService, assertChronologicalBalanceNonNegative, getOwnedAccountOrThrow } from "@/lib/services/account-service";
-import { sumAllocationsForAccount } from "@/lib/services/savings-goal-service";
+import { assertChronologicalBalanceNonNegative, getOwnedAccountOrThrow } from "@/lib/services/account-service";
+import { enforceReservationGuard } from "@/lib/services/goal-reservation-service";
+import type { ReservationConsentInput } from "@/lib/validation/goal-reservation";
 import type {
   CreateBorrowerInput,
   DisburseLoanInput,
@@ -92,10 +93,12 @@ export const BorrowerService = {
     });
   },
 
-  // Hard cap (design.md D2): checked strictly after the existing
-  // insufficient-balance check, with no consent override, unlike
-  // goal-reservation-guard's dip-with-consent flow for other transaction types.
-  async disburseLoan(userId: string, input: DisburseLoanInput) {
+  // A disbursement that would dip into the source account's goal-reserved
+  // balance now goes through the same consent-gated guard every other
+  // outflow type uses (goal-reservation-guard spec), rather than a hard,
+  // non-overridable cap — checked strictly after the existing
+  // insufficient-balance check, same precedence as everywhere else.
+  async disburseLoan(userId: string, input: DisburseLoanInput, consent?: ReservationConsentInput) {
     await getOwnedBorrowerOrThrow(userId, input.borrowerId);
     await getOwnedAccountOrThrow(userId, input.accountId);
 
@@ -122,20 +125,7 @@ export const BorrowerService = {
       });
 
       await assertChronologicalBalanceNonNegative(tx, userId, input.accountId, transaction);
-
-      const balances = await AccountService.computeBalancesFor(userId, [input.accountId]);
-      const balance = new Decimal(balances.get(input.accountId) ?? 0);
-      const alreadyAllocated = await sumAllocationsForAccount(input.accountId);
-      const unallocated = balance.minus(alreadyAllocated);
-      const amount = new Decimal(input.amount);
-
-      if (amount.greaterThan(unallocated)) {
-        throw new AppError(
-          "LOAN_EXCEEDS_UNALLOCATED_BALANCE",
-          `Only ${unallocated.toFixed(2)} is unallocated on this account.`,
-          { unallocated: unallocated.toFixed(2) }
-        );
-      }
+      await enforceReservationGuard(tx, userId, transaction.id, input.accountId, input.amount, null, consent);
 
       return { loan, transaction };
     });

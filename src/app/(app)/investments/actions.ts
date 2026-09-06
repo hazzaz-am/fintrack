@@ -9,7 +9,7 @@ import {
   contributeInvestmentSchema,
   recordMaturityOrWithdrawalSchema,
 } from "@/lib/validation/investment";
-import { reservationConsentSchema, type ReservationConsentInput } from "@/lib/validation/goal-reservation";
+import { parseReservationConsent } from "@/lib/validation/goal-reservation";
 import type { ReservationShortfall } from "@/lib/services/goal-reservation-service";
 import { AppError } from "@/lib/errors";
 
@@ -19,16 +19,6 @@ export interface InvestmentActionState {
   success?: boolean;
   /** Set instead of `error` when this contribution dips into a goal's reserve and needs the consent wizard (goal-reservation-guard spec). */
   reservationRequired?: ReservationShortfall;
-}
-
-function parseReservationConsent(formData: FormData): ReservationConsentInput | undefined {
-  const raw = formData.get("reservationConsent");
-  if (typeof raw !== "string" || raw.trim() === "") return undefined;
-  const parsed = reservationConsentSchema.safeParse(JSON.parse(raw));
-  if (!parsed.success) {
-    throw new AppError("VALIDATION_ERROR", "Invalid reservation consent payload.");
-  }
-  return parsed.data;
 }
 
 function orUndefined(value: FormDataEntryValue | null): string | undefined {

@@ -2,7 +2,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { assertChronologicalBalanceNonNegative, getOwnedAccountOrThrow } from "@/lib/services/account-service";
-import { enforceReservationGuard } from "@/lib/services/transaction-service";
+import { enforceReservationGuard } from "@/lib/services/goal-reservation-service";
 import type { ReservationConsentInput } from "@/lib/validation/goal-reservation";
 import type {
   ContributeInvestmentInput,

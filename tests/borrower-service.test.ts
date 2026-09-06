@@ -64,7 +64,7 @@ describe("BorrowerService.disburseLoan", () => {
     expect(await AccountService.getBalance(user.id, account.id)).toBe("40000.00");
   });
 
-  it("hard-rejects a loan that would exceed the account's unallocated balance, with no consent path, creating no loan or transaction", async () => {
+  it("requires reservation consent for a loan that would exceed the account's unallocated balance, creating no loan or transaction until consented", async () => {
     const user = await createTestUser();
     const account = await createTestAccount(user.id, "50000.00");
     const goal = await SavingsGoalService.create(user.id, { name: "Marriage Fund", targetAmount: "500000.00" });
@@ -79,9 +79,65 @@ describe("BorrowerService.disburseLoan", () => {
         disbursedDate: new Date("2026-09-01"),
         dueDate: new Date("2026-09-15"),
       })
-    ).rejects.toMatchObject({ code: "LOAN_EXCEEDS_UNALLOCATED_BALANCE" });
+    ).rejects.toMatchObject({
+      code: "RESERVATION_CONSENT_REQUIRED",
+      details: { shortfall: "5000.00", unallocated: "10000.00" },
+    });
 
     expect(await AccountService.getBalance(user.id, account.id)).toBe("50000.00");
+    const loans = await prisma.loan.findMany({ where: { borrowerId: borrower.id } });
+    expect(loans).toHaveLength(0);
+  });
+
+  it("disburses a loan that dips into a goal's reserve once the user consents, creating the ledger effect and (when returning) a promise", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "50000.00");
+    const goal = await SavingsGoalService.create(user.id, { name: "Marriage Fund", targetAmount: "500000.00" });
+    await SavingsGoalService.allocate(user.id, { goalId: goal.id, accountId: account.id, amount: "40000.00" });
+    const borrower = await createTestBorrower(user.id);
+
+    const { loan, transaction } = await BorrowerService.disburseLoan(
+      user.id,
+      {
+        borrowerId: borrower.id,
+        accountId: account.id,
+        amount: "15000.00",
+        disbursedDate: new Date("2026-09-01"),
+        dueDate: new Date("2026-09-15"),
+      },
+      { concent: true, allocations: [{ goalId: goal.id, amount: "5000.00", returnBy: new Date("2026-10-15") }] }
+    );
+
+    expect(loan.status).toBe("OPEN");
+    expect(await AccountService.getBalance(user.id, account.id)).toBe("35000.00");
+
+    const events = await prisma.goalAllocationEvent.findMany({ where: { sourceTransactionId: transaction.id } });
+    expect(events).toHaveLength(1);
+    expect(events[0].amount.toString()).toBe("-5000");
+
+    const promises = await prisma.goalReservationPromise.findMany({ where: { savingsGoalId: goal.id } });
+    expect(promises).toHaveLength(1);
+    expect(promises[0]).toMatchObject({ amount: expect.anything(), remainingAmount: expect.anything(), status: "OPEN" });
+    expect(promises[0].amount.toString()).toBe("5000");
+  });
+
+  it("rejects with INSUFFICIENT_BALANCE before the reservation guard ever runs, even when the amount would also exceed the unallocated balance", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "5000.00");
+    const goal = await SavingsGoalService.create(user.id, { name: "Marriage Fund", targetAmount: "500000.00" });
+    await SavingsGoalService.allocate(user.id, { goalId: goal.id, accountId: account.id, amount: "4000.00" });
+    const borrower = await createTestBorrower(user.id);
+
+    await expect(
+      BorrowerService.disburseLoan(user.id, {
+        borrowerId: borrower.id,
+        accountId: account.id,
+        amount: "50000.00",
+        disbursedDate: new Date("2026-09-01"),
+        dueDate: new Date("2026-09-15"),
+      })
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_BALANCE" });
+
     const loans = await prisma.loan.findMany({ where: { borrowerId: borrower.id } });
     expect(loans).toHaveLength(0);
   });
@@ -156,6 +212,39 @@ describe("BorrowerService.recordRepayment", () => {
         transactionDate: new Date("2026-09-05"),
       })
     ).rejects.toMatchObject({ code: "REPAYMENT_EXCEEDS_OUTSTANDING" });
+  });
+
+  it("leaves a linked GoalReservationPromise completely untouched when the loan is fully repaid, even crediting the same account", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccount(user.id, "50000.00");
+    const goal = await SavingsGoalService.create(user.id, { name: "Marriage Fund", targetAmount: "500000.00" });
+    await SavingsGoalService.allocate(user.id, { goalId: goal.id, accountId: account.id, amount: "40000.00" });
+    const borrower = await createTestBorrower(user.id);
+
+    const { loan } = await BorrowerService.disburseLoan(
+      user.id,
+      {
+        borrowerId: borrower.id,
+        accountId: account.id,
+        amount: "15000.00",
+        disbursedDate: new Date("2026-09-01"),
+        dueDate: new Date("2026-09-15"),
+      },
+      { concent: true, allocations: [{ goalId: goal.id, amount: "5000.00", returnBy: new Date("2026-10-15") }] }
+    );
+
+    const updated = await BorrowerService.recordRepayment(user.id, {
+      loanId: loan.id,
+      accountId: account.id,
+      amount: "15000.00",
+      transactionDate: new Date("2026-09-05"),
+    });
+    expect(updated.status).toBe("REPAID");
+
+    const promises = await prisma.goalReservationPromise.findMany({ where: { savingsGoalId: goal.id } });
+    expect(promises).toHaveLength(1);
+    expect(promises[0].status).toBe("OPEN");
+    expect(promises[0].remainingAmount.toString()).toBe("5000");
   });
 });
 
